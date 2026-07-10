@@ -546,9 +546,10 @@ class WaveformWidget(tk.Canvas):
     @staticmethod
     def _fmt_short(t):
         t = max(0, t)
-        m = int(t // 60)
+        h = int(t // 3600)
+        m = int((t % 3600) // 60)
         s = t % 60
-        return f"{m}:{s:04.1f}"
+        return f"{h:02d}:{m:02d}:{s:04.1f}"
 
     @staticmethod
     def _desaturate(hex_color, factor=0.4):
