@@ -2,6 +2,42 @@
 
 手动标注音频文件中每个说话人的起止时间，导出结构化文本。
 
+## 环境要求
+
+| 组件 | 版本 | 说明 |
+|---|---|---|
+| Python | 3.8+ (当前 3.13.9) | 使用 miniconda3 管理 |
+| macOS | 12+ (当前 26.5.1) | Apple Silicon (arm64) |
+| numpy | 2.4.6 | 波形峰值计算 |
+| sounddevice | 0.5.5 | 音频播放（内置 PortAudio） |
+| soundfile | 0.14.0 | 音频文件读写 |
+| tkinter | 8.6 | GUI 框架（Python 自带） |
+| ffmpeg | 8.1.2 | 需包含 ffprobe（用于获取音频时长） |
+
+## 依赖安装
+
+```bash
+# 推荐：创建 conda 环境
+conda create -n audio-annotator python=3.13 -y
+conda activate audio-annotator
+
+# Python 依赖
+pip install numpy sounddevice soundfile
+
+# ffmpeg（含 ffprobe）
+brew install ffmpeg
+```
+
+## 使用
+
+```bash
+# 直接运行
+python main.py
+
+# 打开文件时直接传入
+python main.py /path/to/meeting.wav
+```
+
 ## 功能
 
 - 📂 导入 WAV 音频文件，显示波形
@@ -63,38 +99,19 @@
 - 缩放范围：1x（全览）到 50x（极精细）
 - 点击 **⟲** 重置为全览
 
-## 依赖
+## 音频输出
 
-- Python 3.8+
-- numpy
-- ffmpeg（需包含 ffplay 和 ffprobe）
-
-安装依赖：
-```bash
-pip install numpy
-# macOS:
-brew install ffmpeg
-```
-
-## 使用
-
-```bash
-# 直接运行
-python main.py
-
-# 打开文件时直接传入
-python main.py /path/to/meeting.wav
-```
+- 默认跟随**系统音频输出**（外放/耳机自动切换）
+- 可通过顶部"输出"下拉框手动选择设备
 
 ## 项目结构
 
 ```
 audio_annotator/
 ├── main.py              # 主程序入口
-├── waveform_widget.py   # 波形画布组件（缩放/高度）
+├── waveform_widget.py   # 波形画布组件（缩放/高度/播放头）
 ├── segments_table.py    # 片段列表组件
 ├── speaker_panel.py     # 发言人列表面板
-├── requirements.txt     # Python 依赖
 ├── test_export.py       # 导出测试脚本
 └── README.md            # 使用说明
 ```
