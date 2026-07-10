@@ -149,14 +149,14 @@ class AudioEngine:
                 pass
 
     def _tick(self):
-        if self._eof.is_set() or self.current_time >= self._duration:
-            self._eof.clear()
+        if self._data is not None and self._play_offset >= len(self._data):
             if self._pos_callback:
                 try:
-                    self._pos_callback(self.current_time)
+                    self._pos_callback(self._duration)
                 except Exception:
                     pass
             self._stop_timer()
+            self._cleanup()
             return
         if self._stream is None or not self._stream.active:
             self._stop_timer()
@@ -178,18 +178,15 @@ class AudioEngine:
 
     def _stream_callback(self, outdata, frames, time_info, status):
         if status:
-            pass  # Ignore underflow/overflow warnings during normal operation
+            pass
         if self._stop_evt.is_set():
             outdata[:] = 0
             return sd.CallbackStop
         offset = self._play_offset
-        end = offset + frames
-        available = len(self._data) - offset
-        if available <= 0:
+        if offset >= len(self._data):
             outdata[:] = 0
-            self._eof.set()
             return sd.CallbackStop
-        n = min(frames, available)
+        n = min(frames, len(self._data) - offset)
         block = self._data[offset:offset + n]
         if self._channels == 1:
             outdata[:n, 0] = block
@@ -201,9 +198,8 @@ class AudioEngine:
                 outdata[n:] = 0
         self._play_offset = offset + n
         if self._play_offset >= len(self._data):
-            self._eof.set()
             return sd.CallbackStop
-        return None  # Continue streaming
+        return None
 
     def _play_loop(self):
         try:
