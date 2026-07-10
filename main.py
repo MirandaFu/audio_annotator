@@ -808,7 +808,6 @@ class AudioAnnotator:
             messagebox.showerror("导出失败", str(e))
 
     def _export_xlsx(self, path):
-        colors = self.speaker_panel.get_colors()
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "标注结果"
@@ -842,11 +841,8 @@ class AudioAnnotator:
             ws.cell(row=row_idx, column=3, value=e)
             ws.cell(row=row_idx, column=4, value=dur)
 
-            color = colors.get(speaker, "CCCCCC")
-            fill = PatternFill(start_color=color.lstrip("#"), end_color=color.lstrip("#"), fill_type="solid")
             for col in range(1, 5):
                 cell = ws.cell(row=row_idx, column=col)
-                cell.fill = fill
                 cell.border = thin_border
                 cell.alignment = Alignment(horizontal="center", vertical="center")
 
