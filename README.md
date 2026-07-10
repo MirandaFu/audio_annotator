@@ -22,7 +22,7 @@ conda create -n audio-annotator python=3.13 -y
 conda activate audio-annotator
 
 # Python 依赖
-pip install numpy sounddevice soundfile
+pip install numpy sounddevice soundfile openpyxl
 
 # ffmpeg（含 ffprobe）
 brew install ffmpeg
@@ -48,7 +48,7 @@ python main.py /path/to/meeting.wav
 - ▶️ 播放/暂停/从头播放
 - ✏️ 双击片段编辑说话人名称
 - 🗑️ Delete 键删除片段
-- 💾 导出为文本(Tab分隔) 或 CSV(Excel可导入)
+- 💾 导出为文本(Tab分隔)、CSV 或 Excel(.xlsx)
 
 ## 默认设置
 
@@ -73,6 +73,15 @@ python main.py /path/to/meeting.wav
 说话人2,00:15:44.00,00:15:48.00,00:00:04.00
 ```
 
+### XLSX (Excel)
+```
+| 讲话人 | 开始时间      | 结束时间      | 时长        |
+|--------|--------------|--------------|-------------|
+| 说话人1| 00:14:18.00  | 00:15:44.00  | 00:01:26.00 |
+| 说话人2| 00:15:44.00  | 00:15:48.00  | 00:00:04.00 |
+```
+每个说话人的行会自动着色，方便区分。
+
 ## 操作说明
 
 | 操作 | 说明 |
@@ -89,7 +98,7 @@ python main.py /path/to/meeting.wav
 | 高度滑块 | 调节波形显示高度 |
 | 双击片段 | 编辑说话人名称 |
 | Delete | 删除选中片段 |
-| 💾 导出标注 | 保存为 TXT 或 CSV 文件 |
+| 💾 导出标注 | 保存为 TXT、CSV 或 XLSX 文件 |
 
 ## 缩放说明
 

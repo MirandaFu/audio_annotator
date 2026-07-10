@@ -11,6 +11,8 @@ import sounddevice as sd
 import soundfile as sf
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from waveform_widget import WaveformWidget
 from segments_table import SegmentsTable
 from speaker_panel import SpeakerPanel
@@ -765,6 +767,7 @@ class AudioAnnotator:
             filetypes=[
                 ("文本文件 (Tab分隔)", "*.txt"),
                 ("CSV 表格 (可导入Excel)", "*.csv"),
+                ("Excel 表格 (.xlsx)", "*.xlsx"),
                 ("所有文件", "*.*"),
             ],
         )
@@ -772,6 +775,11 @@ class AudioAnnotator:
             return
 
         ext = os.path.splitext(path)[1].lower()
+
+        if ext == ".xlsx":
+            self._export_xlsx(path)
+            return
+
         is_csv = ext == ".csv"
 
         lines = []
@@ -796,6 +804,61 @@ class AudioAnnotator:
                 f.write("\n".join(lines) + "\n")
             self.status.config(text=f"已导出 {len(self.segments)} 个片段 → {path}")
             messagebox.showinfo("导出成功", f"已导出 {len(self.segments)} 个标注片段\n格式: {'CSV表格' if is_csv else '文本'}")
+        except Exception as e:
+            messagebox.showerror("导出失败", str(e))
+
+    def _export_xlsx(self, path):
+        colors = self.speaker_panel.get_colors()
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "标注结果"
+
+        headers = ["讲话人", "开始时间", "结束时间", "时长"]
+        header_font = Font(bold=True, size=11)
+        header_fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+        header_align = Alignment(horizontal="center", vertical="center")
+
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_align
+
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin'),
+        )
+
+        for row_idx, seg in enumerate(self.segments, 2):
+            speaker = seg["speaker"]
+            s = self._fmt(seg["start"])
+            e = self._fmt(seg["end"])
+            dur = self._fmt(max(0, seg["end"] - seg["start"]))
+
+            ws.cell(row=row_idx, column=1, value=speaker)
+            ws.cell(row=row_idx, column=2, value=s)
+            ws.cell(row=row_idx, column=3, value=e)
+            ws.cell(row=row_idx, column=4, value=dur)
+
+            color = colors.get(speaker, "CCCCCC")
+            fill = PatternFill(start_color=color.lstrip("#"), end_color=color.lstrip("#"), fill_type="solid")
+            for col in range(1, 5):
+                cell = ws.cell(row=row_idx, column=col)
+                cell.fill = fill
+                cell.border = thin_border
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        ws.column_dimensions["A"].width = 16
+        ws.column_dimensions["B"].width = 16
+        ws.column_dimensions["C"].width = 16
+        ws.column_dimensions["D"].width = 14
+
+        try:
+            wb.save(path)
+            self.status.config(text=f"已导出 {len(self.segments)} 个片段 → {path}")
+            messagebox.showinfo("导出成功", f"已导出 {len(self.segments)} 个标注片段\n格式: Excel表格")
         except Exception as e:
             messagebox.showerror("导出失败", str(e))
 
