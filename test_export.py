@@ -42,14 +42,18 @@ lines_txt = []
 for seg in app.segments:
     s = app._fmt(seg["start"])
     e = app._fmt(seg["end"])
-    lines_txt.append(f"{seg['speaker']}\t{s}\t{e}")
+    d = app._fmt(max(0, seg["end"] - seg["start"]))
+    lines_txt.append(f"{seg['speaker']}\t{s}\t{e}\t{d}")
 with open(export_txt, "w", encoding="utf-8") as f:
     f.write("\n".join(lines_txt) + "\n")
 
 # CSV
-lines_csv = ["讲话人,开始时间,结束时间"]
+lines_csv = ["讲话人,开始时间,结束时间,时长"]
 for seg in app.segments:
-    lines_csv.append(f"{seg['speaker']},{app._fmt(seg['start'])},{app._fmt(seg['end'])}")
+    s = app._fmt(seg["start"])
+    e = app._fmt(seg["end"])
+    d = app._fmt(max(0, seg["end"] - seg["start"]))
+    lines_csv.append(f"{seg['speaker']},{s},{e},{d}")
 with open(export_csv, "w", encoding="utf-8-sig") as f:
     f.write("\n".join(lines_csv) + "\n")
 

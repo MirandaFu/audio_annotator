@@ -31,6 +31,7 @@ class WaveformWidget(tk.Canvas):
         self._drag_t0 = None
         self._drag_rect = None
         self._drag_playhead = False
+        self._current_speaker = None
 
         self._peaks = None
         self._peaks_full = None
@@ -51,6 +52,8 @@ class WaveformWidget(tk.Canvas):
         self._mark_line_start = None  # canvas line id for start marker
         self._mark_line_end = None    # canvas line id for end marker (temp)
         self._mark_lines = []         # persistent line ids for completed marks
+        self._playhead_line = None
+        self._playhead_tri = None
 
         self._redraw_after = None
         self.bind("<Configure>", self._schedule_redraw)
@@ -90,6 +93,10 @@ class WaveformWidget(tk.Canvas):
     def set_playhead(self, t):
         self.playhead = t
         self._draw_playhead()
+
+    def set_current_speaker(self, name):
+        self._current_speaker = name
+        self._redraw()
 
     def set_zoom(self, zoom_factor, center_time=None):
         """Set zoom level. zoom_factor > 1 means zoomed in."""
@@ -146,20 +153,32 @@ class WaveformWidget(tk.Canvas):
             if self.scrollbar.winfo_ismapped():
                 self.scrollbar.pack_forget()
 
-    def _on_scrollbar(self, first, last):
-        """Handle scrollbar drag."""
-        if self.duration <= 0:
+    def _on_scrollbar(self, *args):
+        """Handle scrollbar drag/click. tkinter Scrollbar passes 3 args
+        for arrow clicks ("scroll", n, "units") and 2 for drag ("moveto", fraction)."""
+        if not args or self.duration <= 0:
             return
         try:
-            start_ratio = float(first)
-        except (ValueError, TypeError):
+            view_duration = self._view_end - self._view_start
+            if view_duration <= 0:
+                return
+            if args[0] == "scroll":
+                number = float(args[1]) if len(args) > 1 else 0
+                self._view_start = max(0, self._view_start + view_duration * 0.1 * number)
+            elif args[0] == "moveto":
+                first = float(args[1]) if len(args) > 1 else 0
+                self._view_start = first * self.duration
+            else:
+                first = float(args[0])
+                self._view_start = first * self.duration
+            self._view_end = self._view_start + view_duration
+            if self._view_end > self.duration:
+                self._view_end = self.duration
+                self._view_start = self._view_end - view_duration
+            self._zoom = self.duration / view_duration if view_duration > 0 else 1.0
+        except (ValueError, TypeError, IndexError):
             return
-        view_duration = self._view_end - self._view_start
-        self._view_start = start_ratio * self.duration
-        self._view_end = self._view_start + view_duration
-        if self._view_end > self.duration:
-            self._view_end = self.duration
-            self._view_start = self._view_end - view_duration
+        self._update_scrollbar()
         self._redraw()
 
     def set_mark_mode(self, enabled):
@@ -315,6 +334,8 @@ class WaveformWidget(tk.Canvas):
             if ex < x0 or sx > x1:
                 continue
             color = self.speaker_colors.get(seg["speaker"], "#888")
+            if self._current_speaker and seg["speaker"] != self._current_speaker:
+                color = self._desaturate(color)
             self.create_rectangle(sx, y0, ex, y1, fill=color, stipple="gray25",
                                   outline="", width=0)
             self.create_rectangle(sx, y0, ex, y0 + 4, fill=color, outline="")
@@ -351,14 +372,17 @@ class WaveformWidget(tk.Canvas):
         self._draw_playhead()
 
     def _draw_playhead(self):
+        """Create or recreate playhead items at current playhead position."""
         self.delete("playhead")
         if self.duration <= 0:
+            self._playhead_line = None
+            self._playhead_tri = None
             return
         x = self._time_to_x(self.playhead)
         x0, y0, x1, y1 = self._plot_area()
-        self.create_line(x, y0, x, y1, fill="#FAB387", width=2, tags="playhead")
-        self.create_text(x, y0 - 2, text="▶", fill="#FAB387",
-                         font=("Helvetica", 9), anchor="s", tags="playhead")
+        self._playhead_line = self.create_line(x, y0, x, y1, fill="#FAB387", width=2, tags="playhead")
+        self._playhead_tri = self.create_text(x, y0 - 2, text="▶", fill="#FAB387",
+                                              font=("Helvetica", 9), anchor="s", tags="playhead")
 
     # ─── mouse interaction ──────────────────────────────────────────────────
 
@@ -525,3 +549,14 @@ class WaveformWidget(tk.Canvas):
         m = int(t // 60)
         s = t % 60
         return f"{m}:{s:04.1f}"
+
+    @staticmethod
+    def _desaturate(hex_color, factor=0.4):
+        r = int(hex_color[1:3], 16)
+        g = int(hex_color[3:5], 16)
+        b = int(hex_color[5:7], 16)
+        gray = int(0.299 * r + 0.587 * g + 0.114 * b)
+        r = int(r * (1 - factor) + gray * factor)
+        g = int(g * (1 - factor) + gray * factor)
+        b = int(b * (1 - factor) + gray * factor)
+        return f"#{r:02x}{g:02x}{b:02x}"

@@ -69,6 +69,7 @@ class AudioEngine:
         self._play_error = None
         self._error_callback = None
         self._output_device = None  # None = use sounddevice default
+        self._play_offset = 0
 
     def load(self, path):
         self.stop()
@@ -146,24 +147,31 @@ class AudioEngine:
                 pass
 
     def _tick(self):
-        if self.is_playing():
-            self._notify()
-            if self._eof.is_set() or self.current_time >= self._duration:
-                self._eof.clear()
+        if self._eof.is_set() or self.current_time >= self._duration:
+            self._eof.clear()
+            if self._pos_callback:
                 try:
-                    self._root.after_idle(self._pos_callback, 0.0)
+                    self._pos_callback(0.0)
                 except Exception:
                     pass
-                self._stop_timer()
-                return
-        # Always schedule next tick; _stop_timer() / _cleanup() cancels it
-        self._timer = threading.Timer(0.008, self._tick)
-        self._timer.daemon = True
-        self._timer.start()
+            self._stop_timer()
+            return
+        if self._stream is None or not self._stream.active:
+            self._stop_timer()
+            return
+        if self._pos_callback:
+            try:
+                self._pos_callback(self.current_time)
+            except Exception:
+                pass
+        self._timer = self._root.after(4, self._tick)
 
     def _stop_timer(self):
         if self._timer:
-            self._timer.cancel()
+            try:
+                self._root.after_cancel(self._timer)
+            except Exception:
+                pass
             self._timer = None
 
     def _stream_callback(self, outdata, frames, time_info, status):
@@ -197,19 +205,18 @@ class AudioEngine:
 
     def _play_loop(self):
         try:
-            dev = self._output_device
-            if dev is None:
-                try:
-                    dev = sd.default.device[1]
-                except Exception:
-                    dev = None
+            if self._output_device is None:
+                dev = None  # Follow system default
+            else:
+                dev = self._output_device
             self._play_offset = int(self._start_pos * self._fs)
             stream = sd.OutputStream(
                 samplerate=self._fs,
                 device=dev,
                 channels=self._channels,
                 dtype="float32",
-                blocksize=None,  # Let PortAudio choose optimal buffer size
+                blocksize=128,
+                latency='low',
                 callback=self._stream_callback,
             )
             stream.start()
@@ -266,7 +273,6 @@ class AudioEngine:
         self._play_error = None
         self._thread = threading.Thread(target=self._play_loop, daemon=True)
         self._thread.start()
-        time.sleep(0.05)
         if self._stream_ready.wait(timeout=2.0):
             if self._play_error:
                 self._cleanup()
@@ -463,17 +469,13 @@ class AudioAnnotator:
     def _refresh_device_list(self):
         devices = AudioEngine.get_output_devices()
         self._device_map = {}
-        values = []
+        values = ["系统默认"]  # None = follow system default
+        self._device_map["系统默认"] = None
         for idx, name in devices:
             self._device_map[name] = idx
             values.append(name)
         self.combo_device["values"] = values
-        if values:
-            best_idx, best_name = AudioEngine.find_best_output_device()
-            if best_name and best_name in self._device_map:
-                self.device_var.set(best_name)
-            else:
-                self.device_var.set(values[0])
+        self.device_var.set("系统默认")
         self._on_device_change()
 
     def _on_device_change(self, _=None):
@@ -522,8 +524,8 @@ class AudioAnnotator:
             self.pause()
             return
         self.playing = True
-        self.audio.play(self.current_time)
         self.audio.set_position_callback(self._on_pos_update, self.root)
+        self.audio.play(self.current_time)
         self._update_play_button()
 
     def pause(self):
@@ -532,6 +534,7 @@ class AudioAnnotator:
         self.audio.pause()
         self.playing = False
         self.current_time = self.audio.current_time
+        self.waveform.set_playhead(self.current_time)
         self._update_play_button()
         self._update_time_label()
 
@@ -599,6 +602,8 @@ class AudioAnnotator:
         self.current_speaker = name
         color = self.speaker_panel.get_colors().get(name, "#000")
         self.lbl_current.config(text=name, foreground=color)
+        self.waveform.set_current_speaker(name)
+        self.speaker_panel.set_current(name)
 
     def _on_speaker_rename(self, old_name, new_name):
         if not self.speaker_panel.rename_speaker(old_name, new_name):
@@ -611,6 +616,8 @@ class AudioAnnotator:
             self.current_speaker = new_name
             color = self.speaker_panel.get_colors().get(new_name, "#000")
             self.lbl_current.config(text=new_name, foreground=color)
+            self.waveform.set_current_speaker(new_name)
+            self.speaker_panel.set_current(new_name)
 
     def _on_speaker_add(self, name):
         self._on_speaker_select(name)
@@ -622,6 +629,11 @@ class AudioAnnotator:
             if seg["speaker"] == name:
                 seg["speaker"] = new_current
         self._refresh_table()
+        self.current_speaker = new_current
+        color = self.speaker_panel.get_colors().get(new_current, "#000")
+        self.lbl_current.config(text=new_current, foreground=color)
+        self.waveform.set_current_speaker(new_current)
+        self.speaker_panel.set_current(new_current)
         self.status.config(text=f"已删除发言人: {name}")
 
     def zoom_in(self):
@@ -762,7 +774,7 @@ class AudioAnnotator:
 
         lines = []
         if is_csv:
-            lines.append("讲话人,开始时间,结束时间")
+            lines.append("讲话人,开始时间,结束时间,时长")
             sep = ","
         else:
             sep = "\t"
@@ -770,10 +782,11 @@ class AudioAnnotator:
         for seg in self.segments:
             s = self._fmt(seg["start"])
             e = self._fmt(seg["end"])
+            dur = self._fmt(max(0, seg["end"] - seg["start"]))
             speaker = seg["speaker"]
             if is_csv and ("," in speaker or '"' in speaker):
                 speaker = '"' + speaker.replace('"', '""') + '"'
-            lines.append(f"{speaker}{sep}{s}{sep}{e}")
+            lines.append(f"{speaker}{sep}{s}{sep}{e}{sep}{dur}")
 
         try:
             encoding = "utf-8-sig" if is_csv else "utf-8"
@@ -791,12 +804,18 @@ class AudioAnnotator:
             self.btn_play.config(text="▶ 播放")
 
     def _update_time_label(self):
-        cur = self._fmt(self.current_time)
-        dur = self._fmt(self.duration)
-        self.lbl_time.config(text=f"{cur} / {dur}")
-        self.lbl_seek.config(text=f"{cur} / {dur}")
-        if self.duration > 0 and not self._seeking:
-            self.seek_var.set(self.current_time / self.duration * 100)
+        if getattr(self, '_updating_label', False):
+            return
+        self._updating_label = True
+        try:
+            cur = self._fmt(self.current_time)
+            dur = self._fmt(self.duration)
+            self.lbl_time.config(text=f"{cur} / {dur}")
+            self.lbl_seek.config(text=f"{cur} / {dur}")
+            if self.duration > 0 and not self._seeking:
+                self.seek_var.set(self.current_time / self.duration * 100)
+        finally:
+            self._updating_label = False
 
     @staticmethod
     def _fmt(t):
@@ -841,6 +860,16 @@ def _macos_save_file(default_name="export.txt", title="保存文件"):
     return None
 
 
+def _parse_time(t_str):
+    parts = t_str.strip().split(":")
+    if len(parts) != 3:
+        raise ValueError(f"Invalid time format: {t_str}")
+    h = int(parts[0])
+    m = int(parts[1])
+    s = float(parts[2])
+    return h * 3600 + m * 60 + s
+
+
 def _cli_export(audio_path, export_path):
     base = os.path.splitext(audio_path)[0]
     annot_path = base + "_标注.txt"
@@ -874,7 +903,7 @@ def _cli_export(audio_path, export_path):
 
     lines = []
     if is_csv:
-        lines.append("讲话人,开始时间,结束时间")
+        lines.append("讲话人,开始时间,结束时间,时长")
         sep = ","
     else:
         sep = "\t"
@@ -883,7 +912,16 @@ def _cli_export(audio_path, export_path):
         speaker = seg["speaker"]
         if is_csv and ("," in speaker or '"' in speaker):
             speaker = '"' + speaker.replace('"', '""') + '"'
-        lines.append(f"{speaker}{sep}{seg['start']}{sep}{seg['end']}")
+        start_s = seg["start"]
+        end_s = seg["end"]
+        try:
+            start_t = _parse_time(start_s)
+            end_t = _parse_time(end_s)
+            dur = max(0, end_t - start_t)
+            dur_str = AudioAnnotator._fmt(dur)
+        except (ValueError, TypeError):
+            dur_str = end_s  # fallback
+        lines.append(f"{speaker}{sep}{start_s}{sep}{end_s}{sep}{dur_str}")
 
     encoding = "utf-8-sig" if is_csv else "utf-8"
     with open(export_path, "w", encoding=encoding) as f:
@@ -891,7 +929,10 @@ def _cli_export(audio_path, export_path):
 
     print(f"Exported {len(segments)} segments to: {export_path}")
     for seg in segments:
-        print(f"  {seg['speaker']}\t{seg['start']}\t{seg['end']}")
+        start_t = _parse_time(seg["start"])
+        end_t = _parse_time(seg["end"])
+        dur = max(0, end_t - start_t)
+        print(f"  {seg['speaker']}\t{seg['start']}\t{seg['end']}\t{AudioAnnotator._fmt(dur)}")
 
 
 def main():

@@ -71,6 +71,8 @@ class SpeakerPanel(ttk.Frame):
     def _apply_colors(self):
         for i, sp in enumerate(self.speakers):
             color = self.colors.get(sp, "#888")
+            if sp != self.current:
+                color = self._desaturate(color)
             fg = "#000" if self._is_light(color) else "#fff"
             self.listbox.itemconfig(i, bg=color, fg=fg,
                                      selectbackground=color, selectforeground=fg)
@@ -79,6 +81,17 @@ class SpeakerPanel(ttk.Frame):
     def _is_light(hex_color):
         r, g, b = int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16)
         return (r * 299 + g * 587 + b * 114) / 1000 > 128
+
+    @staticmethod
+    def _desaturate(hex_color, factor=0.4):
+        r = int(hex_color[1:3], 16)
+        g = int(hex_color[3:5], 16)
+        b = int(hex_color[5:7], 16)
+        gray = int(0.299 * r + 0.587 * g + 0.114 * b)
+        r = int(r * (1 - factor) + gray * factor)
+        g = int(g * (1 - factor) + gray * factor)
+        b = int(b * (1 - factor) + gray * factor)
+        return f"#{r:02x}{g:02x}{b:02x}"
 
     def _on_select(self, _):
         sel = self.listbox.curselection()
@@ -89,6 +102,7 @@ class SpeakerPanel(ttk.Frame):
         if idx < len(self.speakers):
             name = self.speakers[idx]
             self.current = name
+            self._apply_colors()
             if self.on_select:
                 self.on_select(name)
 
@@ -195,6 +209,7 @@ class SpeakerPanel(ttk.Frame):
             self._selected_idx = idx
             self.listbox.selection_clear(0, "end")
             self.listbox.selection_set(idx)
+            self._apply_colors()
 
     def get_speakers(self):
         return list(self.speakers)
