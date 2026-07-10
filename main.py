@@ -348,7 +348,7 @@ class AudioAnnotator:
         ttk.Button(row1, text="📂 打开", command=self.open_file).pack(side="left", padx=2)
         self.btn_play = ttk.Button(row1, text="▶ 播放", command=self._on_play_click, width=8)
         self.btn_play.pack(side="left", padx=2)
-        ttk.Button(row1, text="⏹ 停止", command=self.stop, width=6).pack(side="left", padx=2)
+        ttk.Button(row1, text="⏹ 从头播放", command=self.stop, width=6).pack(side="left", padx=2)
 
         ttk.Separator(row1, orient="vertical").pack(side="left", fill="y", padx=6)
         self.lbl_time = ttk.Label(row1, text="00:00:00.0 / 00:00:00.0", font=("Courier", 10))
