@@ -8,7 +8,17 @@
       "Bash(sw_vers)",
       "Bash(python *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:pyannote.github.io)",
+      "WebFetch(domain:wenet-e2e.github.io)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(pip index *)",
+      "Bash(pip install *)",
+      "Bash(pip show *)",
+      "Bash(gh repo *)"
     ]
   }
 }
