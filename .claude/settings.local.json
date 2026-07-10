@@ -5,7 +5,10 @@
       "Bash(pip list *)",
       "Bash(ffmpeg -version)",
       "Bash(ffprobe -version)",
-      "Bash(sw_vers)"
+      "Bash(sw_vers)",
+      "Bash(python *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   }
 }
