@@ -62,16 +62,15 @@ class AudioEngine:
         self._stop_evt = threading.Event()
         self._pos_callback = None
         self._root = None
-        self._start_wall = 0.0
         self._start_pos = 0.0
         self._duration = 0.0
         self._timer = None
-        self._eof = threading.Event()
         self._stream_ready = threading.Event()
         self._play_error = None
         self._error_callback = None
-        self._output_device = None  # None = use sounddevice default
+        self._output_device = None
         self._play_offset = 0
+        self._last_cb_t = 0
 
     def load(self, path):
         self.stop()
@@ -120,7 +119,7 @@ class AudioEngine:
     @property
     def current_time(self):
         if self._stream is not None and self._stream.active:
-            return min(self._start_pos + (time.perf_counter() - self._start_wall), self._duration)
+            return self._play_offset / self._fs
         return self._start_pos
 
     def is_playing(self):
@@ -163,10 +162,10 @@ class AudioEngine:
             return
         if self._pos_callback:
             try:
-                self._pos_callback(self.current_time)
+                self._pos_callback(self._play_offset / self._fs)
             except Exception:
                 pass
-        self._timer = self._root.after(4, self._tick)
+        self._timer = self._root.after(2, self._tick)
 
     def _stop_timer(self):
         if self._timer:
@@ -225,7 +224,6 @@ class AudioEngine:
         except Exception as e:
             self._report_error(str(e))
         finally:
-            self._eof.set()
             self._stream_ready.set()
             s = self._stream
             self._stream = None
@@ -264,9 +262,7 @@ class AudioEngine:
             return
         if pos is not None:
             self._start_pos = max(0.0, min(pos, self._duration))
-        self._start_wall = time.perf_counter()
         self._stop_evt.clear()
-        self._eof.clear()
         self._stream_ready.clear()
         self._play_error = None
         self._thread = threading.Thread(target=self._play_loop, daemon=True)
@@ -299,9 +295,7 @@ class AudioEngine:
         self._cleanup()
         self._start_pos = max(0.0, min(t, self._duration))
         if was_playing:
-            self._start_wall = time.perf_counter()
             self._stop_evt.clear()
-            self._eof.clear()
             self._stream_ready.clear()
             self._play_error = None
             self._thread = threading.Thread(target=self._play_loop, daemon=True)
