@@ -151,7 +151,7 @@ class AudioEngine:
             self._eof.clear()
             if self._pos_callback:
                 try:
-                    self._pos_callback(0.0)
+                    self._pos_callback(self.current_time)
                 except Exception:
                     pass
             self._stop_timer()
@@ -554,14 +554,16 @@ class AudioAnnotator:
         self._update_play_button()
 
     def _on_pos_update(self, t):
-        self.current_time = t
-        self.waveform.set_playhead(t)
-        self._update_time_label()
         if t >= self.duration and self.playing:
             self.playing = False
             self.current_time = 0.0
             self.waveform.set_playhead(0.0)
             self._update_play_button()
+            self._update_time_label()
+            return
+        self.current_time = t
+        self.waveform.set_playhead(t)
+        self._update_time_label()
 
     def _on_audio_error(self, msg):
         self.playing = False
