@@ -372,17 +372,18 @@ class WaveformWidget(tk.Canvas):
         self._draw_playhead()
 
     def _draw_playhead(self):
-        """Create or recreate playhead items at current playhead position."""
-        self.delete("playhead")
-        if self.duration <= 0:
-            self._playhead_line = None
-            self._playhead_tri = None
-            return
+        """Move existing playhead items, or create them if needed."""
         x = self._time_to_x(self.playhead)
         x0, y0, x1, y1 = self._plot_area()
-        self._playhead_line = self.create_line(x, y0, x, y1, fill="#FAB387", width=2, tags="playhead")
-        self._playhead_tri = self.create_text(x, y0 - 2, text="▶", fill="#FAB387",
-                                              font=("Helvetica", 9), anchor="s", tags="playhead")
+        if (self._playhead_line is None
+                or self.type(self._playhead_line) is None
+                or not self.coords(self._playhead_line)):
+            self._playhead_line = self.create_line(x, y0, x, y1, fill="#FAB387", width=2, tags="playhead")
+            self._playhead_tri = self.create_text(x, y0 - 2, text="▶", fill="#FAB387",
+                                                  font=("Helvetica", 9), anchor="s", tags="playhead")
+        else:
+            self.coords(self._playhead_line, x, y0, x, y1)
+            self.coords(self._playhead_tri, x, y0 - 2)
 
     # ─── mouse interaction ──────────────────────────────────────────────────
 

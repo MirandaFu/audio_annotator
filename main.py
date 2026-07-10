@@ -327,6 +327,7 @@ class AudioAnnotator:
         self.current_speaker = None
         self.drag_start = None
         self._seeking = False
+        self._label_t = 0.0
 
         self._build_ui()
         if audio_path and os.path.exists(audio_path):
@@ -555,7 +556,10 @@ class AudioAnnotator:
             return
         self.current_time = t
         self.waveform.set_playhead(t)
-        self._update_time_label()
+        now = time.perf_counter()
+        if now - self._label_t >= 0.04:
+            self._label_t = now
+            self._update_time_label()
 
     def _on_audio_error(self, msg):
         self.playing = False
