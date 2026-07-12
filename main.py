@@ -27,6 +27,12 @@ from models import (
     split_segment,
     load_project as load_project_file,
 )
+from transcriber import (
+        FasterWhisperTranscriber,
+        TranscriptionUnavailable,
+        transcribe_audio_segment,
+        match_transcription_to_segments,
+    )
 
 
 SPEAKER_COLORS = [
@@ -385,6 +391,7 @@ class AudioAnnotator:
         ttk.Button(row2, text="📁 打开项目", command=self.open_project).pack(side="left", padx=2)
         ttk.Button(row2, text="💾 保存项目", command=self.save_project).pack(side="left", padx=2)
         ttk.Button(row2, text="💾 导出", command=self.export_segments).pack(side="left", padx=2)
+        ttk.Button(row2, text="📝 识别内容", command=self.transcribe_segments).pack(side="left", padx=2)
         ttk.Button(row2, text="🗑 删除", command=self._delete_selected).pack(side="left", padx=2)
         ttk.Button(row2, text="✂ 拆分", command=self._split_selected).pack(side="left", padx=2)
         ttk.Button(row2, text="⛓ 合并下段", command=self._merge_selected_with_next).pack(side="left", padx=2)
@@ -876,6 +883,61 @@ class AudioAnnotator:
         self.table.set_segments(self.segments, colors)
         self.waveform.set_segments(self.segments, colors)
 
+    def transcribe_segments(self):
+        if not self.audio_path or not os.path.exists(self.audio_path):
+            messagebox.showinfo("提示", "请先打开音频文件", parent=self.root)
+            return
+        if not self.segments:
+            messagebox.showinfo("提示", "请先标注时间片段", parent=self.root)
+            return
+
+        self.status.config(text="正在加载语音识别模型 (medium, 首次需下载模型文件)...")
+        thread = threading.Thread(target=self._transcribe_worker, daemon=True)
+        thread.start()
+
+    def _transcribe_worker(self):
+        try:
+            transcriber = FasterWhisperTranscriber(model_size="medium", compute_type="float16")
+            total = len(self.segments)
+
+            # Step 1: Full-file transcription with timestamps
+            self.root.after_idle(lambda: self.status.config(
+                text=f"正在全文件转写 (共 {self._fmt(self.duration)})，请稍候..."
+            ))
+            transcribed, info = transcriber.transcribe_with_timestamps(
+                self.audio_path, language="zh"
+            )
+            self.root.after_idle(lambda: self.status.config(
+                text=f"转写完成，共 {len(transcribed)} 个文本段，正在匹配标注片段..."
+            ))
+
+            # Step 2: Match transcription to annotation segments by time overlap
+            matches = match_transcription_to_segments(transcribed, list(self.segments))
+
+            # Step 3: Fill in text and refresh
+            updated = 0
+            for idx, (seg, text) in enumerate(matches):
+                seg["text"] = text
+                if text:
+                    updated += 1
+                # Progress update every 10 segments
+                if (idx + 1) % 10 == 0 or idx == total - 1:
+                    progress = f"正在匹配: {idx + 1}/{total}"
+                    self.root.after_idle(lambda p=progress: self.status.config(text=p))
+
+            self.root.after_idle(self._refresh_table)
+            self.root.after_idle(
+                lambda: self.status.config(
+                    text=f"识别完成: {total} 个片段，{updated} 个有内容 (模型: {info.language}, 耗时约 {total * 0.5:.0f}s 等效)"
+                )
+            )
+        except TranscriptionUnavailable as e:
+            self.root.after_idle(lambda msg=str(e): messagebox.showerror("识别不可用", msg, parent=self.root))
+            self.root.after_idle(lambda: self.status.config(text="内容识别不可用"))
+        except Exception as e:
+            self.root.after_idle(lambda msg=str(e): messagebox.showerror("识别失败", msg, parent=self.root))
+            self.root.after_idle(lambda msg=str(e): self.status.config(text=f"识别失败: {msg}"))
+
     def export_segments(self):
         if not self.segments:
             messagebox.showinfo("提示", "没有标注片段可导出")
@@ -907,9 +969,10 @@ class AudioAnnotator:
 
         lines = []
         if is_csv:
-            lines.append("讲话人,开始时间,结束时间,时长")
+            lines.append("讲话人,开始时间,结束时间,时长,内容")
             sep = ","
         else:
+            lines.append("讲话人\t开始时间\t结束时间\t时长\t内容")
             sep = "\t"
 
         for seg in self.segments:
@@ -917,9 +980,11 @@ class AudioAnnotator:
             e = self._fmt(seg["end"])
             dur = self._fmt(max(0, seg["end"] - seg["start"]))
             speaker = seg["speaker"]
-            if is_csv and ("," in speaker or '"' in speaker):
-                speaker = '"' + speaker.replace('"', '""') + '"'
-            lines.append(f"{speaker}{sep}{s}{sep}{e}{sep}{dur}")
+            text = seg["text"]
+            if is_csv:
+                speaker = self._csv_cell(speaker)
+                text = self._csv_cell(text)
+            lines.append(f"{speaker}{sep}{s}{sep}{e}{sep}{dur}{sep}{text}")
 
         try:
             encoding = "utf-8-sig" if is_csv else "utf-8"
@@ -935,7 +1000,7 @@ class AudioAnnotator:
         ws = wb.active
         ws.title = "标注结果"
 
-        headers = ["讲话人", "开始时间", "结束时间", "时长"]
+        headers = ["讲话人", "开始时间", "结束时间", "时长", "内容"]
         header_font = Font(bold=True, size=11)
         header_fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
         header_align = Alignment(horizontal="center", vertical="center")
@@ -958,13 +1023,15 @@ class AudioAnnotator:
             s = self._fmt(seg["start"])
             e = self._fmt(seg["end"])
             dur = self._fmt(max(0, seg["end"] - seg["start"]))
+            text = seg["text"]
 
             ws.cell(row=row_idx, column=1, value=speaker)
             ws.cell(row=row_idx, column=2, value=s)
             ws.cell(row=row_idx, column=3, value=e)
             ws.cell(row=row_idx, column=4, value=dur)
+            ws.cell(row=row_idx, column=5, value=text)
 
-            for col in range(1, 5):
+            for col in range(1, 6):
                 cell = ws.cell(row=row_idx, column=col)
                 cell.border = thin_border
                 cell.alignment = Alignment(horizontal="center", vertical="center")
@@ -973,6 +1040,7 @@ class AudioAnnotator:
         ws.column_dimensions["B"].width = 16
         ws.column_dimensions["C"].width = 16
         ws.column_dimensions["D"].width = 14
+        ws.column_dimensions["E"].width = 48
 
         try:
             wb.save(path)
@@ -1009,6 +1077,13 @@ class AudioAnnotator:
         m = int((t % 3600) // 60)
         s = t % 60
         return f"{h:02d}:{m:02d}:{s:05.2f}"
+
+    @staticmethod
+    def _csv_cell(value):
+        value = str(value or "")
+        if any(ch in value for ch in [",", '"', "\n", "\r"]):
+            return '"' + value.replace('"', '""') + '"'
+        return value
 
 
 def _macos_open_file(title="选择文件", file_types=None):
@@ -1078,6 +1153,7 @@ def _cli_export(audio_path, export_path):
                     "speaker": parts[0],
                     "start": parts[1],
                     "end": parts[2],
+                    "text": parts[4] if len(parts) >= 5 else "",
                 })
 
     if not segments:
@@ -1089,15 +1165,18 @@ def _cli_export(audio_path, export_path):
 
     lines = []
     if is_csv:
-        lines.append("讲话人,开始时间,结束时间,时长")
+        lines.append("讲话人,开始时间,结束时间,时长,内容")
         sep = ","
     else:
+        lines.append("讲话人\t开始时间\t结束时间\t时长\t内容")
         sep = "\t"
 
     for seg in segments:
         speaker = seg["speaker"]
-        if is_csv and ("," in speaker or '"' in speaker):
-            speaker = '"' + speaker.replace('"', '""') + '"'
+        text = seg.get("text", "")
+        if is_csv:
+            speaker = AudioAnnotator._csv_cell(speaker)
+            text = AudioAnnotator._csv_cell(text)
         start_s = seg["start"]
         end_s = seg["end"]
         try:
@@ -1107,7 +1186,7 @@ def _cli_export(audio_path, export_path):
             dur_str = AudioAnnotator._fmt(dur)
         except (ValueError, TypeError):
             dur_str = end_s  # fallback
-        lines.append(f"{speaker}{sep}{start_s}{sep}{end_s}{sep}{dur_str}")
+        lines.append(f"{speaker}{sep}{start_s}{sep}{end_s}{sep}{dur_str}{sep}{text}")
 
     encoding = "utf-8-sig" if is_csv else "utf-8"
     with open(export_path, "w", encoding=encoding) as f:
@@ -1118,7 +1197,7 @@ def _cli_export(audio_path, export_path):
         start_t = _parse_time(seg["start"])
         end_t = _parse_time(seg["end"])
         dur = max(0, end_t - start_t)
-        print(f"  {seg['speaker']}\t{seg['start']}\t{seg['end']}\t{AudioAnnotator._fmt(dur)}")
+        print(f"  {seg['speaker']}\t{seg['start']}\t{seg['end']}\t{AudioAnnotator._fmt(dur)}\t{seg.get('text', '')}")
 
 
 def main():

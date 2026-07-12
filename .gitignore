@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Test data (large audio files)
+testdata/*.wav
+testdata/*.mp3
+testdata/*.flac
+testdata/*.docx
+testdata/*.xlsx
+testdata/transcription_results/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude local settings (user-specific)
+.claude/settings.local.json

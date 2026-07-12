@@ -22,18 +22,20 @@ class SegmentsTable(ttk.Frame):
         self.speaker_colors = {}
 
         # Treeview
-        columns = ("idx", "speaker", "start", "end", "duration")
+        columns = ("idx", "speaker", "start", "end", "duration", "text")
         self.tree = ttk.Treeview(self, columns=columns, show="headings", height=12)
         self.tree.heading("idx", text="#")
         self.tree.heading("speaker", text="说话人")
         self.tree.heading("start", text="开始时间")
         self.tree.heading("end", text="结束时间")
         self.tree.heading("duration", text="时长")
+        self.tree.heading("text", text="内容")
         self.tree.column("idx", width=40, anchor="center")
         self.tree.column("speaker", width=120)
         self.tree.column("start", width=100, anchor="center")
         self.tree.column("end", width=100, anchor="center")
         self.tree.column("duration", width=80, anchor="center")
+        self.tree.column("text", width=360)
 
         vsb = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=vsb.set)
@@ -63,6 +65,7 @@ class SegmentsTable(ttk.Frame):
                 self._fmt(seg["start"]),
                 self._fmt(seg["end"]),
                 f"{dur:.1f}s",
+                self._get(seg, "text", ""),
             )
             self.tree.insert("", "end", values=values)
 
@@ -137,3 +140,10 @@ class SegmentsTable(ttk.Frame):
         m = int((t % 3600) // 60)
         s = t % 60
         return f"{h:02d}:{m:02d}:{s:05.2f}"
+
+    @staticmethod
+    def _get(seg, key, default=None):
+        try:
+            return seg[key]
+        except (KeyError, TypeError):
+            return default

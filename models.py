@@ -14,16 +14,18 @@ class Segment:
     start: float
     end: float
     speaker: str
+    text: str = ""
 
     def __post_init__(self):
         self.start = float(self.start)
         self.end = float(self.end)
         self.speaker = str(self.speaker)
+        self.text = str(self.text or "")
         if self.end < self.start:
             self.start, self.end = self.end, self.start
 
     def __getitem__(self, key):
-        if key in {"start", "end", "speaker"}:
+        if key in {"start", "end", "speaker", "text"}:
             return getattr(self, key)
         raise KeyError(key)
 
@@ -34,6 +36,8 @@ class Segment:
             self.end = float(value)
         elif key == "speaker":
             self.speaker = str(value)
+        elif key == "text":
+            self.text = str(value or "")
         else:
             raise KeyError(key)
         if self.end < self.start:
@@ -44,11 +48,11 @@ class Segment:
         return max(0.0, self.end - self.start)
 
     def to_dict(self):
-        return {"start": self.start, "end": self.end, "speaker": self.speaker}
+        return {"start": self.start, "end": self.end, "speaker": self.speaker, "text": self.text}
 
     @classmethod
     def from_dict(cls, data):
-        return cls(data["start"], data["end"], data["speaker"])
+        return cls(data["start"], data["end"], data["speaker"], data.get("text", ""))
 
 
 @dataclass
@@ -141,8 +145,8 @@ def split_segment(segments, index, split_time, min_duration=0.05):
     t = float(split_time)
     if t - segment.start < min_duration or segment.end - t < min_duration:
         return False
-    first = Segment(segment.start, t, segment.speaker)
-    second = Segment(t, segment.end, segment.speaker)
+    first = Segment(segment.start, t, segment.speaker, segment.text)
+    second = Segment(t, segment.end, segment.speaker, "")
     segments[index:index + 1] = [first, second]
     sort_segments(segments)
     return True
@@ -155,7 +159,8 @@ def merge_segments(segments, first_index):
     first = coerce_segment(segments[first_index])
     second = coerce_segment(segments[second_index])
     speaker = first.speaker if first.speaker == second.speaker else first.speaker
-    merged = Segment(min(first.start, second.start), max(first.end, second.end), speaker)
+    text = " ".join(part for part in (first.text.strip(), second.text.strip()) if part)
+    merged = Segment(min(first.start, second.start), max(first.end, second.end), speaker, text)
     segments[first_index:second_index + 1] = [merged]
     sort_segments(segments)
     return True

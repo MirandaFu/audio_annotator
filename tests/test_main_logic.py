@@ -29,8 +29,8 @@ class MainLogicTests(unittest.TestCase):
                 _cli_export(audio_path, str(export_path))
 
             content = export_path.read_text(encoding="utf-8-sig")
-            self.assertIn("讲话人,开始时间,结束时间,时长", content)
-            self.assertIn('"张三, ""主持""",00:00:01.00,00:00:03.50,00:00:02.50', content)
+            self.assertIn("讲话人,开始时间,结束时间,时长,内容", content)
+            self.assertIn('"张三, ""主持""",00:00:01.00,00:00:03.50,00:00:02.50,', content)
 
     def test_cli_export_txt_keeps_tab_format(self):
         with tempfile.TemporaryDirectory() as td:
@@ -45,7 +45,8 @@ class MainLogicTests(unittest.TestCase):
 
             self.assertEqual(
                 export_path.read_text(encoding="utf-8"),
-                "张三\t00:00:01.00\t00:00:02.00\t00:00:01.00\n",
+                "讲话人\t开始时间\t结束时间\t时长\t内容\n"
+                "张三\t00:00:01.00\t00:00:02.00\t00:00:01.00\t\n",
             )
 
 
