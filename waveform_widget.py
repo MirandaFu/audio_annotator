@@ -14,12 +14,13 @@ class WaveformWidget(tk.Canvas):
     PADDING_BOTTOM = 30
 
     def __init__(self, master, on_play_at=None, on_drag_start=None, on_drag_end=None,
-                 on_mark_complete=None, **kw):
+                 on_mark_complete=None, on_segment_adjust=None, **kw):
         super().__init__(master, bg="#1e1e2e", highlightthickness=0, **kw)
         self.on_play_at = on_play_at
         self.on_drag_start = on_drag_start
         self.on_drag_end = on_drag_end
         self.on_mark_complete = on_mark_complete
+        self.on_segment_adjust = on_segment_adjust
 
         self.audio_data = None
         self.sample_rate = 48000
@@ -31,6 +32,9 @@ class WaveformWidget(tk.Canvas):
         self._drag_t0 = None
         self._drag_rect = None
         self._drag_playhead = False
+        self._drag_segment_index = None
+        self._drag_segment_edge = None
+        self._drag_edge_line = None
         self._current_speaker = None
 
         self._peaks = None
@@ -393,6 +397,17 @@ class WaveformWidget(tk.Canvas):
             return
         x0, y0, x1, y1 = self._plot_area()
         t = self._x_to_time(ev.x)
+        hit = self._hit_segment_edge(ev.x, ev.y)
+        if hit is not None:
+            idx, edge = hit
+            self._drag_x0 = ev.x
+            self._drag_t0 = t
+            self._drag_rect = None
+            self._drag_playhead = False
+            self._drag_segment_index = idx
+            self._drag_segment_edge = edge
+            self._motion_at(ev.x)
+            return
         playhead_x = self._time_to_x(self.playhead)
         # If click is near the playhead, enter playhead-drag mode
         if abs(ev.x - playhead_x) < 15 and self.duration > 0:
@@ -417,6 +432,9 @@ class WaveformWidget(tk.Canvas):
             self.playhead = max(self._view_start, min(t, self._view_end))
             self._draw_playhead()
             return
+        if self._drag_segment_index is not None:
+            self._motion_at(cx)
+            return
         self._motion_at(cx)
 
     def _release(self, ev):
@@ -430,6 +448,15 @@ class WaveformWidget(tk.Canvas):
             self._draw_playhead()
             if self.on_play_at:
                 self.on_play_at(self.playhead)
+            return
+        if self._drag_segment_index is not None:
+            t_end = self._x_to_time(ev.x)
+            index = self._drag_segment_index
+            edge = self._drag_segment_edge
+            self._clear_edge_drag()
+            self._drag_x0 = None
+            if self.on_segment_adjust:
+                self.on_segment_adjust(index, edge, t_end)
             return
         t_end = self._x_to_time(ev.x)
         self._drag_x0 = None
@@ -448,6 +475,9 @@ class WaveformWidget(tk.Canvas):
             self.playhead = max(self._view_start, min(t, self._view_end))
             self._draw_playhead()
             return
+        if self._drag_segment_index is not None:
+            self._motion_at(cx)
+            return
         self._motion_at(cx)
 
     def _global_release(self, ev):
@@ -464,6 +494,17 @@ class WaveformWidget(tk.Canvas):
             if self.on_play_at:
                 self.on_play_at(self.playhead)
             return
+        if self._drag_segment_index is not None:
+            cx = self.canvasx(ev.x)
+            cx = max(self._plot_area()[0], min(cx, self._plot_area()[2]))
+            t_end = self._x_to_time(cx)
+            index = self._drag_segment_index
+            edge = self._drag_segment_edge
+            self._clear_edge_drag()
+            self._drag_x0 = None
+            if self.on_segment_adjust:
+                self.on_segment_adjust(index, edge, t_end)
+            return
         cx = self.canvasx(ev.x)
         cx = max(self._plot_area()[0], min(cx, self._plot_area()[2]))
         t_end = self._x_to_time(cx)
@@ -477,6 +518,13 @@ class WaveformWidget(tk.Canvas):
     def _motion_at(self, cx):
         if self._drag_x0 is None:
             return
+        if self._drag_segment_index is not None:
+            if self._drag_edge_line:
+                self.delete(self._drag_edge_line)
+            x0p, y0p, x1p, y1p = self._plot_area()
+            cx = max(x0p, min(cx, x1p))
+            self._drag_edge_line = self.create_line(cx, y0p, cx, y1p, fill="#F9E2AF", width=3)
+            return
         if self._drag_rect:
             self.delete(self._drag_rect)
         x0p, y0p, x1p, y1p = self._plot_area()
@@ -484,6 +532,31 @@ class WaveformWidget(tk.Canvas):
             min(self._drag_x0, cx), y0p, max(self._drag_x0, cx), y1p,
             fill="#FAB387", stipple="gray25", outline="", width=0
         )
+
+    def _clear_edge_drag(self):
+        if self._drag_edge_line:
+            self.delete(self._drag_edge_line)
+            self._drag_edge_line = None
+        self._drag_segment_index = None
+        self._drag_segment_edge = None
+
+    def _hit_segment_edge(self, x, y):
+        x0, y0, x1, y1 = self._plot_area()
+        if y < y0 or y > y1:
+            return None
+        best = None
+        best_dist = 8
+        for idx, seg in enumerate(self.segments):
+            sx = self._time_to_x(seg["start"])
+            ex = self._time_to_x(seg["end"])
+            if ex < x0 or sx > x1:
+                continue
+            for edge, edge_x in (("start", sx), ("end", ex)):
+                dist = abs(x - edge_x)
+                if dist <= best_dist:
+                    best = (idx, edge)
+                    best_dist = dist
+        return best
 
     def _dbl_click(self, ev):
         t = self._x_to_time(ev.x)

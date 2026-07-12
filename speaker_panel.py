@@ -133,6 +133,24 @@ class SpeakerPanel(ttk.Frame):
         self._apply_colors()
         return True
 
+    def set_speakers(self, speakers, colors, current=None):
+        self.speakers = list(speakers)
+        self.colors = dict(colors)
+        if current in self.speakers:
+            self.current = current
+        elif self.speakers:
+            self.current = self.speakers[0]
+        else:
+            self.current = None
+        self.listbox.delete(0, "end")
+        for sp in self.speakers:
+            self.listbox.insert("end", sp)
+        if self.current in self.speakers:
+            idx = self.speakers.index(self.current)
+            self._selected_idx = idx
+            self.listbox.selection_set(idx)
+        self._apply_colors()
+
     def _rename(self, idx):
         old_name = self.speakers[idx]
         popup = tk.Toplevel(self)

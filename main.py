@@ -16,6 +16,17 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from waveform_widget import WaveformWidget
 from segments_table import SegmentsTable
 from speaker_panel import SpeakerPanel
+from models import (
+    AnnotationProject,
+    Segment,
+    Speaker,
+    adjust_segment_edge,
+    merge_segments,
+    save_project,
+    sort_segments,
+    split_segment,
+    load_project as load_project_file,
+)
 
 
 SPEAKER_COLORS = [
@@ -324,6 +335,7 @@ class AudioAnnotator:
         self.audio = AudioEngine()
         self.audio.set_error_callback(self._on_audio_error)
         self.segments = []
+        self.project_path = None
         self.current_speaker = None
         self.drag_start = None
         self._seeking = False
@@ -370,8 +382,12 @@ class AudioAnnotator:
         self.btn_mark = tk.Checkbutton(row2, text="📌 打点模式", indicatoron=False,
                                        selectcolor="#4a7c59", command=self._toggle_mark_mode)
         self.btn_mark.pack(side="left", padx=2)
+        ttk.Button(row2, text="📁 打开项目", command=self.open_project).pack(side="left", padx=2)
+        ttk.Button(row2, text="💾 保存项目", command=self.save_project).pack(side="left", padx=2)
         ttk.Button(row2, text="💾 导出", command=self.export_segments).pack(side="left", padx=2)
         ttk.Button(row2, text="🗑 删除", command=self._delete_selected).pack(side="left", padx=2)
+        ttk.Button(row2, text="✂ 拆分", command=self._split_selected).pack(side="left", padx=2)
+        ttk.Button(row2, text="⛓ 合并下段", command=self._merge_selected_with_next).pack(side="left", padx=2)
 
         ttk.Separator(row2, orient="vertical").pack(side="left", fill="y", padx=6)
         ttk.Label(row2, text="缩放:").pack(side="left")
@@ -411,6 +427,7 @@ class AudioAnnotator:
             on_drag_start=self._on_drag_start,
             on_drag_end=self._on_drag_end,
             on_mark_complete=self._on_mark_complete,
+            on_segment_adjust=self._on_segment_adjust,
         )
         self._waveform_scrollbar = tk.Scrollbar(waveform_container, orient="horizontal")
         self._waveform_scrollbar.config(command=self.waveform._on_scrollbar)
@@ -510,6 +527,75 @@ class AudioAnnotator:
                                 f"时长: {self._fmt(self.duration)}  |  "
                                 f"采样率: {self.sample_rate} Hz")
 
+    def open_project(self):
+        path = filedialog.askopenfilename(
+            parent=self.root,
+            title="打开标注项目",
+            filetypes=[("Audio Annotator 项目", "*.aaproj *.json"), ("所有文件", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            project = load_project_file(path)
+            self._apply_project(project)
+            self.project_path = path
+            self.status.config(text=f"已打开项目: {path}")
+        except Exception as e:
+            messagebox.showerror("打开项目失败", str(e), parent=self.root)
+
+    def save_project(self):
+        if not self.audio_path:
+            messagebox.showinfo("提示", "请先打开音频文件", parent=self.root)
+            return
+        path = self.project_path
+        if not path:
+            base = os.path.splitext(os.path.basename(self.audio_path or "标注项目"))[0]
+            path = filedialog.asksaveasfilename(
+                parent=self.root,
+                title="保存标注项目",
+                defaultextension=".aaproj",
+                initialfile=base + ".aaproj",
+                filetypes=[("Audio Annotator 项目", "*.aaproj"), ("JSON 文件", "*.json"), ("所有文件", "*.*")],
+            )
+            if not path:
+                return
+        try:
+            save_project(path, self._project_from_state())
+            self.project_path = path
+            self.status.config(text=f"已保存项目: {path}")
+        except Exception as e:
+            messagebox.showerror("保存项目失败", str(e), parent=self.root)
+
+    def _project_from_state(self):
+        colors = self.speaker_panel.get_colors()
+        speakers = [Speaker(name, colors.get(name, "#888")) for name in self.speaker_panel.get_speakers()]
+        return AnnotationProject(self.audio_path, speakers, list(self.segments))
+
+    def _apply_project(self, project):
+        if project.audio_path and os.path.exists(project.audio_path):
+            self.load_audio(project.audio_path)
+        elif project.audio_path:
+            self.audio_path = project.audio_path
+            messagebox.showwarning("音频缺失", f"项目中的音频文件不存在:\n{project.audio_path}", parent=self.root)
+
+        if project.speakers:
+            speaker_names = [speaker.name for speaker in project.speakers]
+            colors = {speaker.name: speaker.color for speaker in project.speakers}
+        else:
+            speaker_names = ["说话人1", "说话人2"]
+            colors = {"说话人1": SPEAKER_COLORS[0], "说话人2": SPEAKER_COLORS[1]}
+
+        current = speaker_names[0]
+        self.speaker_panel.set_speakers(speaker_names, colors, current)
+        self.current_speaker = current
+        color = colors.get(current, "#000")
+        self.lbl_current.config(text=current, foreground=color)
+        self.waveform.set_current_speaker(current)
+
+        self.segments = list(project.segments)
+        sort_segments(self.segments)
+        self._refresh_table()
+
     def play(self):
         if not self.audio_path or self.audio._data is None:
             return
@@ -591,9 +677,9 @@ class AudioAnnotator:
         if t_end - t_start < 0.05:
             return
         speaker = self.current_speaker or "说话人1"
-        seg = {"start": t_start, "end": t_end, "speaker": speaker}
+        seg = Segment(t_start, t_end, speaker)
         self.segments.append(seg)
-        self.segments.sort(key=lambda s: s["start"])
+        sort_segments(self.segments)
         self._refresh_table()
 
     def _on_speaker_select(self, name):
@@ -604,11 +690,17 @@ class AudioAnnotator:
         self.speaker_panel.set_current(name)
 
     def _on_speaker_rename(self, old_name, new_name):
-        if not self.speaker_panel.rename_speaker(old_name, new_name):
+        speakers = self.speaker_panel.get_speakers()
+        if new_name not in speakers:
+            if not self.speaker_panel.rename_speaker(old_name, new_name):
+                return
+        elif old_name in speakers:
             return
+
         for seg in self.segments:
             if seg["speaker"] == old_name:
                 seg["speaker"] = new_name
+        sort_segments(self.segments)
         self._refresh_table()
         if self.current_speaker == old_name:
             self.current_speaker = new_name
@@ -626,6 +718,7 @@ class AudioAnnotator:
         for seg in self.segments:
             if seg["speaker"] == name:
                 seg["speaker"] = new_current
+        sort_segments(self.segments)
         self._refresh_table()
         self.current_speaker = new_current
         color = self.speaker_panel.get_colors().get(new_current, "#000")
@@ -670,16 +763,52 @@ class AudioAnnotator:
             self._seek_to(self.current_time)
 
     def _delete_selected(self):
-        sel = self.table.tree.selection()
-        if not sel:
+        idx = self._selected_segment_index()
+        if idx is None:
             messagebox.showinfo("提示", "请先在下方列表中选择一个片段")
             return
-        item = sel[0]
-        idx = self.table.tree.index(item)
         if 0 <= idx < len(self.segments):
             del self.segments[idx]
             self._refresh_table()
             self.status.config(text=f"已删除片段 #{idx+1}")
+
+    def _selected_segment_index(self):
+        sel = self.table.tree.selection()
+        if not sel:
+            return None
+        return self.table.tree.index(sel[0])
+
+    def _split_selected(self):
+        idx = self._selected_segment_index()
+        if idx is None:
+            messagebox.showinfo("提示", "请先选择要拆分的片段", parent=self.root)
+            return
+        seg = self.segments[idx]
+        split_at = self.current_time
+        if not (seg["start"] < split_at < seg["end"]):
+            split_at = (seg["start"] + seg["end"]) / 2
+        if split_segment(self.segments, idx, split_at):
+            self._refresh_table()
+            self.status.config(text=f"已拆分片段 #{idx+1}")
+        else:
+            messagebox.showinfo("提示", "播放头需要位于片段内部，且两侧都要保留足够长度", parent=self.root)
+
+    def _merge_selected_with_next(self):
+        idx = self._selected_segment_index()
+        if idx is None:
+            messagebox.showinfo("提示", "请先选择要合并的片段", parent=self.root)
+            return
+        if merge_segments(self.segments, idx):
+            self._refresh_table()
+            self.status.config(text=f"已合并片段 #{idx+1} 和 #{idx+2}")
+        else:
+            messagebox.showinfo("提示", "当前片段后面没有可合并的片段", parent=self.root)
+
+    def _on_segment_adjust(self, index, edge, t):
+        if adjust_segment_edge(self.segments, index, edge, t, self.duration):
+            self._refresh_table()
+            label = "起点" if edge == "start" else "终点"
+            self.status.config(text=f"已调整片段 #{index+1} {label}: {self._fmt(t)}")
 
     def _seek_to(self, t):
         was_playing = self.playing
@@ -723,9 +852,9 @@ class AudioAnnotator:
             speaker = var.get().strip()
             if not speaker:
                 speaker = speakers[0] if speakers else "说话人1"
-            seg = {"start": start, "end": end, "speaker": speaker}
+            seg = Segment(start, end, speaker)
             self.segments.append(seg)
-            self.segments.sort(key=lambda s: s["start"])
+            sort_segments(self.segments)
             self._refresh_table()
             self.status.config(text=f"已标注: {speaker} [{self._fmt(start)} - {self._fmt(end)}]")
             popup.destroy()
@@ -943,6 +1072,8 @@ def _cli_export(audio_path, export_path):
                 continue
             parts = line.split("\t")
             if len(parts) >= 3:
+                if parts[0] == "讲话人" and parts[1] == "开始时间":
+                    continue
                 segments.append({
                     "speaker": parts[0],
                     "start": parts[1],
