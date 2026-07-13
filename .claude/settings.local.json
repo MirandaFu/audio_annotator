@@ -18,7 +18,19 @@
       "Bash(pip index *)",
       "Bash(pip install *)",
       "Bash(pip show *)",
-      "Bash(gh repo *)"
+      "Bash(gh repo *)",
+      "Bash(env PYTHONDONTWRITEBYTECODE=1 *)",
+      "Bash(ffprobe *)",
+      "Bash(git tag *)",
+      "Bash(tee test_reports/v1/test_results.txt)",
+      "Bash(tee test_reports/v2/test_results.txt)",
+      "Read(//Users/fpandax/.cache/**)",
+      "Read(//private/tmp/**)",
+      "Bash(xxd testdata/3-数智办公四月第二次例会.docx)",
+      "Bash(grep -E \"FAIL|ERROR|ok$\")",
+      "Bash(echo \"PID: $!\")",
+      "Bash(echo \"已启动，PID: $!\")",
+      "Bash(echo \"EXIT CODE: $?\")"
     ]
   }
 }

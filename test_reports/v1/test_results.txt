@@ -1,0 +1,182 @@
+test_correction_handles_empty_input (test_annotation_flow.AnnotationWorkflowIntegrationTests.test_correction_handles_empty_input) ... ok
+test_correction_pipeline_preserves_unknown_text (test_annotation_flow.AnnotationWorkflowIntegrationTests.test_correction_pipeline_preserves_unknown_text)
+Text without any matching rules should pass through unchanged. ... ok
+test_full_annotation_roundtrip (test_annotation_flow.AnnotationWorkflowIntegrationTests.test_full_annotation_roundtrip)
+Create annotation project, simulate transcription, export, reload. ... ok
+test_initial_prompt_changes_with_terms (test_annotation_flow.AnnotationWorkflowIntegrationTests.test_initial_prompt_changes_with_terms)
+Adding terms to config should change the initial prompt. ... ok
+test_project_normalize_sorts_and_dedupes (test_annotation_flow.AnnotationWorkflowIntegrationTests.test_project_normalize_sorts_and_dedupes)
+Normalize should sort segments and coerce types. ... ok
+test_sort_segments_after_edits (test_annotation_flow.AnnotationWorkflowIntegrationTests.test_sort_segments_after_edits)
+Segments should remain sorted after any edit operation. ... ok
+test_transcription_matching_partial_overlap (test_annotation_flow.AnnotationWorkflowIntegrationTests.test_transcription_matching_partial_overlap)
+Partial overlap should still match text. ... ok
+test_transcription_matching_with_gaps (test_annotation_flow.AnnotationWorkflowIntegrationTests.test_transcription_matching_with_gaps)
+When transcription has gaps, unmatched segments get empty text. ... ok
+test_adjust_edge_clamps_to_duration (test_annotation_flow.EdgeCaseTests.test_adjust_edge_clamps_to_duration) ... ok
+test_adjust_edge_prevents_inversion (test_annotation_flow.EdgeCaseTests.test_adjust_edge_prevents_inversion) ... ok
+test_audio_engine_no_data (test_annotation_flow.EdgeCaseTests.test_audio_engine_no_data) ... ok
+test_audio_engine_zero_duration (test_annotation_flow.EdgeCaseTests.test_audio_engine_zero_duration) ... ok
+test_merge_segments_boundary (test_annotation_flow.EdgeCaseTests.test_merge_segments_boundary) ... ok
+test_overlap_detection_adjacent_not_overlap (test_annotation_flow.EdgeCaseTests.test_overlap_detection_adjacent_not_overlap)
+Segments touching at a boundary are not overlapping. ... ok
+test_overlap_detection_empty (test_annotation_flow.EdgeCaseTests.test_overlap_detection_empty) ... ok
+test_overlap_detection_no_overlaps (test_annotation_flow.EdgeCaseTests.test_overlap_detection_no_overlaps) ... ok
+test_overlap_detection_single (test_annotation_flow.EdgeCaseTests.test_overlap_detection_single) ... ok
+test_parse_time_edge_cases (test_annotation_flow.EdgeCaseTests.test_parse_time_edge_cases) ... ok
+test_parse_time_invalid_format (test_annotation_flow.EdgeCaseTests.test_parse_time_invalid_format) ... ok
+test_parse_time_lenient_format (test_annotation_flow.EdgeCaseTests.test_parse_time_lenient_format)
+_parse_time accepts non-zero-padded parts (splits on ':' correctly). ... ok
+test_segment_negative_times (test_annotation_flow.EdgeCaseTests.test_segment_negative_times) ... ok
+test_segment_swapped_bounds (test_annotation_flow.EdgeCaseTests.test_segment_swapped_bounds)
+Segment should auto-swap if end < start. ... ok
+test_segment_zero_duration (test_annotation_flow.EdgeCaseTests.test_segment_zero_duration) ... ok
+test_split_segment_boundary (test_annotation_flow.EdgeCaseTests.test_split_segment_boundary) ... ok
+test_split_segment_too_close_to_edge (test_annotation_flow.EdgeCaseTests.test_split_segment_too_close_to_edge) ... ok
+test_pause_when_not_playing (test_audio_engine.AudioEnginePlaybackTests.test_pause_when_not_playing) ... ok
+test_pause_while_playing (test_audio_engine.AudioEnginePlaybackTests.test_pause_while_playing) ... ok
+test_resume_does_nothing_when_playing (test_audio_engine.AudioEnginePlaybackTests.test_resume_does_nothing_when_playing) ... ok
+test_seek_clamps_to_duration (test_audio_engine.AudioEnginePlaybackTests.test_seek_clamps_to_duration) ... ok
+test_seek_negative_clamps_to_zero (test_audio_engine.AudioEnginePlaybackTests.test_seek_negative_clamps_to_zero) ... ok
+test_seek_updates_position (test_audio_engine.AudioEnginePlaybackTests.test_seek_updates_position) ... ok
+test_current_time_when_playing (test_audio_engine.AudioEngineStateTests.test_current_time_when_playing) ... ok
+test_current_time_when_stopped (test_audio_engine.AudioEngineStateTests.test_current_time_when_stopped) ... ok
+test_duration_after_load (test_audio_engine.AudioEngineStateTests.test_duration_after_load) ... ok
+test_find_best_device_empty (test_audio_engine.AudioEngineStateTests.test_find_best_device_empty) ... ok
+test_find_best_device_fallback_to_first (test_audio_engine.AudioEngineStateTests.test_find_best_device_fallback_to_first) ... ok
+test_find_best_device_filters_virtual (test_audio_engine.AudioEngineStateTests.test_find_best_device_filters_virtual) ... ok
+test_not_playing_initially (test_audio_engine.AudioEngineStateTests.test_not_playing_initially) ... ok
+test_sample_rate_after_load (test_audio_engine.AudioEngineStateTests.test_sample_rate_after_load) ... ok
+test_set_output_device (test_audio_engine.AudioEngineStateTests.test_set_output_device) ... ok
+test_stop_resets_position (test_audio_engine.AudioEngineStateTests.test_stop_resets_position) ... ok
+test_load_corrupt_returns_default (test_correction.ConfigFileTests.test_load_corrupt_returns_default) ... ok
+test_load_missing_returns_default (test_correction.ConfigFileTests.test_load_missing_returns_default) ... ok
+test_save_and_load (test_correction.ConfigFileTests.test_save_and_load) ... ok
+test_apply_runs_all_steps (test_correction.CorrectionConfigTests.test_apply_runs_all_steps) ... ok
+test_build_initial_prompt_empty_terms (test_correction.CorrectionConfigTests.test_build_initial_prompt_empty_terms) ... ok
+test_build_initial_prompt_with_terms (test_correction.CorrectionConfigTests.test_build_initial_prompt_with_terms) ... ok
+test_default_config_has_common_rules (test_correction.CorrectionConfigTests.test_default_config_has_common_rules) ... ok
+test_roundtrip_json (test_correction.CorrectionConfigTests.test_roundtrip_json) ... ok
+test_empty_hint (test_correction.CustomTermTests.test_empty_hint) ... ok
+test_roundtrip (test_correction.CustomTermTests.test_roundtrip) ... ok
+test_disabled_does_nothing (test_correction.FillerFilterTests.test_disabled_does_nothing) ... ok
+test_empty_text (test_correction.FillerFilterTests.test_empty_text) ... ok
+test_filters_fillers (test_correction.FillerFilterTests.test_filters_fillers) ... ok
+test_applies_replacement (test_correction.RegexRuleTests.test_applies_replacement) ... ok
+test_disabled_rule_does_nothing (test_correction.RegexRuleTests.test_disabled_rule_does_nothing) ... ok
+test_invalid_pattern_raises (test_correction.RegexRuleTests.test_invalid_pattern_raises) ... ok
+test_roundtrip (test_correction.RegexRuleTests.test_roundtrip) ... ok
+test_cli_export_csv_quotes_speaker_names (test_main_logic.MainLogicTests.test_cli_export_csv_quotes_speaker_names) ... ok
+test_cli_export_txt_keeps_tab_format (test_main_logic.MainLogicTests.test_cli_export_txt_keeps_tab_format) ... ok
+test_time_parse_and_format (test_main_logic.MainLogicTests.test_time_parse_and_format) ... ok
+test_overlap_detection (test_models.ModelTests.test_overlap_detection) ... ok
+test_project_roundtrip_json (test_models.ModelTests.test_project_roundtrip_json) ... ok
+test_segment_supports_existing_dict_access (test_models.ModelTests.test_segment_supports_existing_dict_access) ... ok
+test_sort_split_merge_and_adjust (test_models.ModelTests.test_sort_split_merge_and_adjust) ... ok
+test_analyze_confidence (test_phase2_features.CorrectionConfigConfidenceTests.test_analyze_confidence) ... ok
+test_confidence_thresholds_in_config (test_phase2_features.CorrectionConfigConfidenceTests.test_confidence_thresholds_in_config) ... ok
+test_get_low_confidence_words (test_phase2_features.CorrectionConfigConfidenceTests.test_get_low_confidence_words) ... ok
+test_pinyin_corrector_in_default_config (test_phase2_features.CorrectionConfigConfidenceTests.test_pinyin_corrector_in_default_config) ... ok
+test_chinese_characters_preserved (test_phase2_features.PinyinCorrectorTests.test_chinese_characters_preserved) ... ok
+test_disabled_passes_through (test_phase2_features.PinyinCorrectorTests.test_disabled_passes_through) ... ok
+test_empty_string (test_phase2_features.PinyinCorrectorTests.test_empty_string) ... ok
+test_mixed_chinese_english (test_phase2_features.PinyinCorrectorTests.test_mixed_chinese_english) ... ok
+test_non_chinese_unchanged (test_phase2_features.PinyinCorrectorTests.test_non_chinese_unchanged) ... ok
+test_none_input (test_phase2_features.PinyinCorrectorTests.test_none_input) ... ok
+test_pinyin_corrector_has_cache (test_phase2_features.PinyinCorrectorTests.test_pinyin_corrector_has_cache) ... ok
+test_roundtrip_json (test_phase2_features.PinyinCorrectorTests.test_roundtrip_json) ... ok
+test_threshold_stored (test_phase2_features.PinyinCorrectorTests.test_threshold_stored) ... ok
+test_correction_with_pinyin_disabled (test_phase2_features.PinyinIntegrationTests.test_correction_with_pinyin_disabled) ... ok
+test_full_config_roundtrip_with_pinyin (test_phase2_features.PinyinIntegrationTests.test_full_config_roundtrip_with_pinyin) ... ok
+test_pinyin_before_regex (test_phase2_features.PinyinIntegrationTests.test_pinyin_before_regex)
+Pinyin correction should run before regex rules. ... ok
+test_avg_confidence_high (test_phase2_features.SegmentConfidenceTests.test_avg_confidence_high) ... ok
+test_avg_confidence_low (test_phase2_features.SegmentConfidenceTests.test_avg_confidence_low) ... ok
+test_empty_words (test_phase2_features.SegmentConfidenceTests.test_empty_words) ... ok
+test_low_confidence_words (test_phase2_features.SegmentConfidenceTests.test_low_confidence_words) ... ok
+test_roundtrip (test_phase2_features.SegmentConfidenceTests.test_roundtrip) ... ok
+test_default_probability (test_phase2_features.WordConfidenceTests.test_default_probability) ... ok
+test_default_timestamps (test_phase2_features.WordConfidenceTests.test_default_timestamps) ... ok
+test_is_low_below_threshold (test_phase2_features.WordConfidenceTests.test_is_low_below_threshold) ... ok
+test_is_not_low_above_threshold (test_phase2_features.WordConfidenceTests.test_is_not_low_above_threshold) ... ok
+test_is_very_low (test_phase2_features.WordConfidenceTests.test_is_very_low) ... ok
+test_marker_high (test_phase2_features.WordConfidenceTests.test_marker_high) ... ok
+test_marker_low (test_phase2_features.WordConfidenceTests.test_marker_low) ... ok
+test_marker_very_low (test_phase2_features.WordConfidenceTests.test_marker_very_low) ... ok
+test_roundtrip (test_phase2_features.WordConfidenceTests.test_roundtrip) ... ok
+test_fmt_hours (test_segments_table.SegmentsTableFormattingTests.test_fmt_hours) ... ok
+test_fmt_minutes_and_seconds (test_segments_table.SegmentsTableFormattingTests.test_fmt_minutes_and_seconds) ... ok
+test_fmt_negative_clamps_to_zero (test_segments_table.SegmentsTableFormattingTests.test_fmt_negative_clamps_to_zero) ... ok
+test_fmt_seconds_only (test_segments_table.SegmentsTableFormattingTests.test_fmt_seconds_only) ... ok
+test_get_bad_type_returns_default (test_segments_table.SegmentsTableFormattingTests.test_get_bad_type_returns_default) ... ok
+test_get_existing_key (test_segments_table.SegmentsTableFormattingTests.test_get_existing_key) ... ok
+test_get_missing_key_returns_default (test_segments_table.SegmentsTableFormattingTests.test_get_missing_key_returns_default) ... ok
+test_set_segments_calculates_duration (test_segments_table.SegmentsTableSetSegmentsTests.test_set_segments_calculates_duration) ... ok
+test_set_segments_clears_existing (test_segments_table.SegmentsTableSetSegmentsTests.test_set_segments_clears_existing) ... ok
+test_set_segments_empty_list (test_segments_table.SegmentsTableSetSegmentsTests.test_set_segments_empty_list) ... ok
+test_set_segments_indexing (test_segments_table.SegmentsTableSetSegmentsTests.test_set_segments_indexing) ... ok
+test_set_segments_missing_text_defaults_empty (test_segments_table.SegmentsTableSetSegmentsTests.test_set_segments_missing_text_defaults_empty) ... ok
+test_set_segments_populates_tree (test_segments_table.SegmentsTableSetSegmentsTests.test_set_segments_populates_tree) ... ok
+test_core_modules_import (test_smoke.SmokeTests.test_core_modules_import) ... ok
+test_add_speaker_appends_list (test_speaker_panel.SpeakerPanelLogicTests.test_add_speaker_appends_list) ... ok
+test_add_speaker_assigns_color (test_speaker_panel.SpeakerPanelLogicTests.test_add_speaker_assigns_color) ... ok
+test_add_speaker_auto_selects (test_speaker_panel.SpeakerPanelLogicTests.test_add_speaker_auto_selects) ... ok
+test_delete_speaker_prevents_last_one (test_speaker_panel.SpeakerPanelLogicTests.test_delete_speaker_prevents_last_one) ... ok
+test_delete_speaker_removes_color (test_speaker_panel.SpeakerPanelLogicTests.test_delete_speaker_removes_color) ... ok
+test_desaturate_reduces_saturation (test_speaker_panel.SpeakerPanelLogicTests.test_desaturate_reduces_saturation) ... ok
+test_get_colors_returns_copy (test_speaker_panel.SpeakerPanelLogicTests.test_get_colors_returns_copy) ... ok
+test_get_speakers_returns_copy (test_speaker_panel.SpeakerPanelLogicTests.test_get_speakers_returns_copy) ... ok
+test_initial_selection_first_speaker (test_speaker_panel.SpeakerPanelLogicTests.test_initial_selection_first_speaker) ... ok
+test_initial_selection_second_speaker (test_speaker_panel.SpeakerPanelLogicTests.test_initial_selection_second_speaker) ... ok
+test_is_light_detects_light_color (test_speaker_panel.SpeakerPanelLogicTests.test_is_light_detects_light_color) ... ok
+test_is_light_mid_color (test_speaker_panel.SpeakerPanelLogicTests.test_is_light_mid_color) ... ok
+test_next_speaker_name_increments (test_speaker_panel.SpeakerPanelLogicTests.test_next_speaker_name_increments) ... ok
+test_next_speaker_name_no_existing (test_speaker_panel.SpeakerPanelLogicTests.test_next_speaker_name_no_existing) ... ok
+test_rename_speaker_preserves_color (test_speaker_panel.SpeakerPanelLogicTests.test_rename_speaker_preserves_color) ... ok
+test_rename_speaker_rejects_duplicate (test_speaker_panel.SpeakerPanelLogicTests.test_rename_speaker_rejects_duplicate) ... ok
+test_rename_speaker_rejects_empty (test_speaker_panel.SpeakerPanelLogicTests.test_rename_speaker_rejects_empty) ... ok
+test_rename_speaker_rejects_same_name (test_speaker_panel.SpeakerPanelLogicTests.test_rename_speaker_rejects_same_name) ... ok
+test_rename_speaker_updates_current_if_needed (test_speaker_panel.SpeakerPanelLogicTests.test_rename_speaker_updates_current_if_needed) ... ok
+test_rename_speaker_updates_name (test_speaker_panel.SpeakerPanelLogicTests.test_rename_speaker_updates_name) ... ok
+test_set_current_changes_selection (test_speaker_panel.SpeakerPanelLogicTests.test_set_current_changes_selection) ... ok
+test_set_speakers_empty_clears (test_speaker_panel.SpeakerPanelLogicTests.test_set_speakers_empty_clears) ... ok
+test_set_speakers_falls_back_to_first (test_speaker_panel.SpeakerPanelLogicTests.test_set_speakers_falls_back_to_first) ... ok
+test_set_speakers_replaces_all (test_speaker_panel.SpeakerPanelLogicTests.test_set_speakers_replaces_all) ... ok
+test_match_empty_transcription_returns_empty (test_transcriber.TranscriberTests.test_match_empty_transcription_returns_empty) ... ok
+test_match_no_overlap_returns_empty (test_transcriber.TranscriberTests.test_match_no_overlap_returns_empty) ... ok
+test_match_transcription_to_segments_by_overlap (test_transcriber.TranscriberTests.test_match_transcription_to_segments_by_overlap) ... ok
+test_transcribe_audio_segment_slices_audio_by_time (test_transcriber.TranscriberTests.test_transcribe_audio_segment_slices_audio_by_time) ... ok
+test_height_scale_clamped (test_waveform_widget.WaveformGeometryTests.test_height_scale_clamped) ... ok
+test_plot_area_dimensions (test_waveform_widget.WaveformGeometryTests.test_plot_area_dimensions) ... ok
+test_set_playhead_updates_time (test_waveform_widget.WaveformGeometryTests.test_set_playhead_updates_time) ... ok
+test_time_to_x_at_end (test_waveform_widget.WaveformGeometryTests.test_time_to_x_at_end) ... ok
+test_time_to_x_at_start (test_waveform_widget.WaveformGeometryTests.test_time_to_x_at_start) ... ok
+test_time_to_x_midpoint (test_waveform_widget.WaveformGeometryTests.test_time_to_x_midpoint) ... ok
+test_x_to_time_at_left_edge (test_waveform_widget.WaveformGeometryTests.test_x_to_time_at_left_edge) ... ok
+test_x_to_time_at_right_edge (test_waveform_widget.WaveformGeometryTests.test_x_to_time_at_right_edge) ... ok
+test_x_to_time_clamps_negative (test_waveform_widget.WaveformGeometryTests.test_x_to_time_clamps_negative) ... ok
+test_x_to_time_clamps_to_view (test_waveform_widget.WaveformGeometryTests.test_x_to_time_clamps_to_view) ... ok
+test_zoom_changes_view_range (test_waveform_widget.WaveformGeometryTests.test_zoom_changes_view_range) ... ok
+test_zoom_decreases_range (test_waveform_widget.WaveformGeometryTests.test_zoom_decreases_range) ... ok
+test_zoom_increases_range (test_waveform_widget.WaveformGeometryTests.test_zoom_increases_range) ... ok
+test_zoom_limits (test_waveform_widget.WaveformGeometryTests.test_zoom_limits) ... ok
+test_zoom_preserves_center (test_waveform_widget.WaveformGeometryTests.test_zoom_preserves_center) ... ok
+test_zoom_reset (test_waveform_widget.WaveformGeometryTests.test_zoom_reset) ... ok
+test_compute_peaks_downsample_large (test_waveform_widget.WaveformPeaksTests.test_compute_peaks_downsample_large) ... ok
+test_compute_peaks_empty_data (test_waveform_widget.WaveformPeaksTests.test_compute_peaks_empty_data) ... ok
+test_compute_peaks_reduces_data (test_waveform_widget.WaveformPeaksTests.test_compute_peaks_reduces_data) ... ok
+test_get_visible_peaks_downsample_for_canvas (test_waveform_widget.WaveformPeaksTests.test_get_visible_peaks_downsample_for_canvas) ... ok
+test_get_visible_peaks_none_when_no_data (test_waveform_widget.WaveformPeaksTests.test_get_visible_peaks_none_when_no_data) ... ok
+test_get_visible_peaks_returns_subset (test_waveform_widget.WaveformPeaksTests.test_get_visible_peaks_returns_subset) ... ok
+test_desaturate_darkens_color (test_waveform_widget.WaveformSegmentTests.test_desaturate_darkens_color) ... ok
+test_fmt_short_formats_correctly (test_waveform_widget.WaveformSegmentTests.test_fmt_short_formats_correctly) ... ok
+test_hit_segment_edge_detects_end (test_waveform_widget.WaveformSegmentTests.test_hit_segment_edge_detects_end) ... ok
+test_hit_segment_edge_detects_start (test_waveform_widget.WaveformSegmentTests.test_hit_segment_edge_detects_start) ... ok
+test_hit_segment_edge_none_when_far (test_waveform_widget.WaveformSegmentTests.test_hit_segment_edge_none_when_far) ... ok
+test_segments_set_replaces_list (test_waveform_widget.WaveformSegmentTests.test_segments_set_replaces_list) ... ok
+test_set_current_speaker_changes_highlight (test_waveform_widget.WaveformSegmentTests.test_set_current_speaker_changes_highlight) ... ok
+
+----------------------------------------------------------------------
+Ran 166 tests in 0.606s
+
+OK

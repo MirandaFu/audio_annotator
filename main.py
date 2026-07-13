@@ -6,6 +6,7 @@ import sys
 import os
 import time
 import threading
+from pathlib import Path
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
@@ -27,11 +28,21 @@ from models import (
     split_segment,
     load_project as load_project_file,
 )
+from correction import (
+        CorrectionConfig,
+        load_config,
+        save_config,
+    )
 from transcriber import (
         FasterWhisperTranscriber,
         TranscriptionUnavailable,
         transcribe_audio_segment,
         match_transcription_to_segments,
+        match_confidence_to_segments,
+        VadConfig,
+        VAD_PRESETS,
+        merge_short_segments,
+        vote_transcription,
     )
 
 
@@ -346,6 +357,12 @@ class AudioAnnotator:
         self.drag_start = None
         self._seeking = False
         self._label_t = 0.0
+        self._correction_config = load_config(self._correction_config_path())
+        self._vad_preset = tk.StringVar(value="conservative")
+        self._merge_enabled = tk.BooleanVar(value=True)
+        self._merge_min_duration = tk.DoubleVar(value=1.0)
+        self._merge_max_gap = tk.DoubleVar(value=0.5)
+        self._vote_enabled = tk.BooleanVar(value=False)
 
         self._build_ui()
         if audio_path and os.path.exists(audio_path):
@@ -392,6 +409,7 @@ class AudioAnnotator:
         ttk.Button(row2, text="💾 保存项目", command=self.save_project).pack(side="left", padx=2)
         ttk.Button(row2, text="💾 导出", command=self.export_segments).pack(side="left", padx=2)
         ttk.Button(row2, text="📝 识别内容", command=self.transcribe_segments).pack(side="left", padx=2)
+        ttk.Button(row2, text="✏️ 纠错", command=self._open_correction_panel).pack(side="left", padx=2)
         ttk.Button(row2, text="🗑 删除", command=self._delete_selected).pack(side="left", padx=2)
         ttk.Button(row2, text="✂ 拆分", command=self._split_selected).pack(side="left", padx=2)
         ttk.Button(row2, text="⛓ 合并下段", command=self._merge_selected_with_next).pack(side="left", padx=2)
@@ -891,44 +909,140 @@ class AudioAnnotator:
             messagebox.showinfo("提示", "请先标注时间片段", parent=self.root)
             return
 
+        if not self._show_transcribe_options():
+            return
+
         self.status.config(text="正在加载语音识别模型 (medium, 首次需下载模型文件)...")
         thread = threading.Thread(target=self._transcribe_worker, daemon=True)
         thread.start()
 
+    def _show_transcribe_options(self) -> bool:
+        """Show transcription options dialog. Returns True if user confirmed."""
+        popup = tk.Toplevel(self.root)
+        popup.title("转写选项")
+        popup.transient(self.root)
+        popup.grab_set()
+        popup.resizable(False, False)
+
+        # VAD preset
+        frm_vad = ttk.LabelFrame(popup, text="VAD 分割策略 (减少过度切分)")
+        frm_vad.pack(fill="x", padx=10, pady=(10, 5))
+        ttk.Label(frm_vad, text="预设:").pack(side="left", padx=5, pady=5)
+        vad_combo = ttk.Combobox(frm_vad, textvariable=self._vad_preset, state="readonly",
+                                 values=list(VAD_PRESETS.keys()), width=15)
+        vad_combo.pack(side="left", padx=5, pady=5)
+
+        def _on_vad_change(event=None):
+            preset = VAD_PRESETS.get(self._vad_preset.get(), VAD_PRESETS["conservative"])
+            lbl_vad_desc.config(text=preset["description"])
+
+        vad_combo.bind("<<ComboboxSelected>>", _on_vad_change)
+        lbl_vad_desc = ttk.Label(frm_vad, text=VAD_PRESETS["conservative"]["description"],
+                                 foreground="gray")
+        lbl_vad_desc.pack(side="left", padx=5, pady=5)
+
+        # Merge strategy
+        frm_merge = ttk.LabelFrame(popup, text="片段合并策略 (合并短片段)")
+        frm_merge.pack(fill="x", padx=10, pady=5)
+        ttk.Checkbutton(frm_merge, text="启用合并",
+                        variable=self._merge_enabled).pack(side="left", padx=5, pady=5)
+        ttk.Label(frm_merge, text="最短时长(s):").pack(side="left", padx=(15, 2), pady=5)
+        spin_dur = ttk.Spinbox(frm_merge, from_=0.3, to=5.0, increment=0.1,
+                               textvariable=self._merge_min_duration, width=6)
+        spin_dur.pack(side="left", padx=2, pady=5)
+        ttk.Label(frm_merge, text="最大间隔(s):").pack(side="left", padx=(10, 2), pady=5)
+        spin_gap = ttk.Spinbox(frm_merge, from_=0.1, to=2.0, increment=0.1,
+                               textvariable=self._merge_max_gap, width=6)
+        spin_gap.pack(side="left", padx=2, pady=5)
+
+        # Model voting
+        frm_vote = ttk.LabelFrame(popup, text="双模型投票 (small + medium 选择更优结果)")
+        frm_vote.pack(fill="x", padx=10, pady=5)
+        ttk.Checkbutton(frm_vote, text="启用投票 (速度减半，可能提高准确率)",
+                        variable=self._vote_enabled).pack(side="left", padx=5, pady=5)
+
+        # Buttons
+        btn_frame = ttk.Frame(popup)
+        btn_frame.pack(fill="x", padx=10, pady=(10, 10))
+        ttk.Button(btn_frame, text="开始转写",
+                   command=popup.destroy).pack(side="right", padx=5)
+        ttk.Button(btn_frame, text="取消",
+                   command=lambda: [self._vote_enabled.set(False), popup.destroy()]).pack(side="right", padx=5)
+
+        popup.update_idletasks()
+        w = popup.winfo_width()
+        h = popup.winfo_height()
+        x = self.root.winfo_x() + (self.root.winfo_width() - w) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - h) // 2
+        popup.geometry(f"{w}x{h}+{x}+{y}")
+
+        self.root.wait_window(popup)
+        return self._vote_enabled.get() or self._merge_enabled.get() or self._vad_preset.get() != "conservative"
+
     def _transcribe_worker(self):
         try:
-            transcriber = FasterWhisperTranscriber(model_size="medium", compute_type="float16")
+            config = self._correction_config
+            initial_prompt = config.build_initial_prompt()
             total = len(self.segments)
-
-            # Step 1: Full-file transcription with timestamps
-            self.root.after_idle(lambda: self.status.config(
-                text=f"正在全文件转写 (共 {self._fmt(self.duration)})，请稍候..."
-            ))
-            transcribed, info = transcriber.transcribe_with_timestamps(
-                self.audio_path, language="zh"
+            vote = self._vote_enabled.get()
+            merge = self._merge_enabled.get()
+            merge_dur = self._merge_min_duration.get()
+            merge_gap = self._merge_max_gap.get()
+            vad_preset = VAD_PRESETS.get(self._vad_preset.get(), VAD_PRESETS["conservative"])
+            vad_cfg = VadConfig(
+                min_silence_duration_ms=vad_preset["min_silence_duration_ms"],
+                speech_pad_ms=vad_preset["speech_pad_ms"],
+                preset=self._vad_preset.get(),
             )
-            self.root.after_idle(lambda: self.status.config(
-                text=f"转写完成，共 {len(transcribed)} 个文本段，正在匹配标注片段..."
-            ))
 
-            # Step 2: Match transcription to annotation segments by time overlap
-            matches = match_transcription_to_segments(transcribed, list(self.segments))
+            # Step 1: Transcription
+            if vote:
+                self.root.after_idle(lambda: self.status.config(
+                    text=f"正在双模型转写 (共 {self._fmt(self.duration)})，请稍候..."
+                ))
+                matches, model_info = vote_transcription(
+                    self.audio_path, list(self.segments),
+                    language="zh", initial_prompt=initial_prompt, vad_config=vad_cfg,
+                )
+            else:
+                self.root.after_idle(lambda: self.status.config(
+                    text=f"正在全文件转写 (共 {self._fmt(self.duration)})，请稍候..."
+                ))
+                transcriber = FasterWhisperTranscriber(model_size="large-v3-turbo", compute_type="float16")
+                transcribed, info = transcriber.transcribe_with_timestamps(
+                    self.audio_path, language="zh", initial_prompt=initial_prompt,
+                    vad_config=vad_cfg,
+                )
 
-            # Step 3: Fill in text and refresh
+                # Step 1.5: Merge short segments if enabled
+                if merge:
+                    transcribed = merge_short_segments(transcribed, merge_dur, merge_gap)
+
+                self.root.after_idle(lambda: self.status.config(
+                    text=f"转写完成，共 {len(transcribed)} 个文本段，正在应用纠错..."
+                ))
+
+                # Step 2: Match transcription to annotation segments by time overlap
+                matches = match_transcription_to_segments(transcribed, list(self.segments))
+
+            # Step 3: Apply post-processing corrections
             updated = 0
             for idx, (seg, text) in enumerate(matches):
-                seg["text"] = text
-                if text:
+                corrected = config.apply(text)
+                seg["text"] = corrected
+                if corrected:
                     updated += 1
-                # Progress update every 10 segments
                 if (idx + 1) % 10 == 0 or idx == total - 1:
                     progress = f"正在匹配: {idx + 1}/{total}"
                     self.root.after_idle(lambda p=progress: self.status.config(text=p))
 
             self.root.after_idle(self._refresh_table)
+            model_label = "medium"
+            if vote:
+                model_label = "small+medium投票"
             self.root.after_idle(
                 lambda: self.status.config(
-                    text=f"识别完成: {total} 个片段，{updated} 个有内容 (模型: {info.language}, 耗时约 {total * 0.5:.0f}s 等效)"
+                    text=f"识别完成: {total} 个片段，{updated} 个有内容 (模型: {model_label})"
                 )
             )
         except TranscriptionUnavailable as e:
@@ -1084,6 +1198,182 @@ class AudioAnnotator:
         if any(ch in value for ch in [",", '"', "\n", "\r"]):
             return '"' + value.replace('"', '""') + '"'
         return value
+
+    @staticmethod
+    def _correction_config_path():
+        return Path.home() / ".audio-annotator" / "correction-config.json"
+
+    def _open_correction_panel(self):
+        self._build_correction_panel()
+
+    def _build_correction_panel(self):
+        popup = tk.Toplevel(self.root)
+        popup.title("转写纠错设置")
+        popup.geometry("520x500")
+        popup.transient(self.root)
+        popup.grab_set()
+
+        config = self._correction_config
+
+        # Custom terms section
+        terms_frame = ttk.LabelFrame(popup, text="用户词典 (提示转写模型)")
+        terms_frame.pack(fill="both", expand=True, padx=8, pady=4)
+
+        terms_list_frame = ttk.Frame(terms_frame)
+        terms_list_frame.pack(fill="both", expand=True, padx=4, pady=2)
+        terms_listbox = tk.Listbox(terms_list_frame, height=6, font=("Helvetica", 10))
+        terms_listbox.pack(side="left", fill="both", expand=True)
+        terms_scroll = ttk.Scrollbar(terms_list_frame, command=terms_listbox.yview)
+        terms_scroll.pack(side="right", fill="y")
+        terms_listbox.config(yscrollcommand=terms_scroll.set)
+        for t in config.custom_terms:
+            terms_listbox.insert("end", f"{t.term} ({t.hint})" if t.hint else t.term)
+
+        term_var = tk.StringVar()
+        term_hint_var = tk.StringVar()
+        term_entry_frame = ttk.Frame(terms_frame)
+        term_entry_frame.pack(fill="x", padx=4, pady=2)
+        ttk.Entry(term_entry_frame, textvariable=term_var, width=20, placeholder="术语").pack(side="left", padx=2)
+        ttk.Entry(term_entry_frame, textvariable=term_hint_var, width=20, placeholder="提示(可选)").pack(side="left", padx=2)
+
+        def add_term():
+            term = term_var.get().strip()
+            if not term:
+                return
+            config.custom_terms.append(CustomTerm(term=term, hint=term_hint_var.get().strip()))
+            terms_listbox.insert("end", f"{term} ({term_hint_var.get().strip()})" if term_hint_var.get().strip() else term)
+            term_var.set("")
+            term_hint_var.set("")
+            save_config(self._correction_config_path(), config)
+
+        def del_term():
+            sel = terms_listbox.curselection()
+            if not sel:
+                return
+            idx = sel[0]
+            config.custom_terms.pop(idx)
+            terms_listbox.delete(idx)
+            save_config(self._correction_config_path(), config)
+
+        ttk.Button(term_entry_frame, text="＋", command=add_term, width=3).pack(side="left", padx=2)
+        ttk.Button(term_entry_frame, text="－", command=del_term, width=3).pack(side="left", padx=2)
+
+        # Regex rules section
+        rules_frame = ttk.LabelFrame(popup, text="正则替换规则")
+        rules_frame.pack(fill="both", expand=True, padx=8, pady=4)
+
+        rules_list_frame = ttk.Frame(rules_frame)
+        rules_list_frame.pack(fill="both", expand=True, padx=4, pady=2)
+        rules_listbox = tk.Listbox(rules_list_frame, height=6, font=("Helvetica", 10))
+        rules_listbox.pack(side="left", fill="both", expand=True)
+        rules_scroll = ttk.Scrollbar(rules_list_frame, command=rules_listbox.yview)
+        rules_scroll.pack(side="right", fill="y")
+        rules_listbox.config(yscrollcommand=rules_scroll.set)
+        for r in config.regex_rules:
+            status = "✓" if r.enabled else "✗"
+            rules_listbox.insert("end", f"{status} {r.description}: {r.pattern} → {r.replacement}")
+
+        rule_pat_var = tk.StringVar()
+        rule_rep_var = tk.StringVar()
+        rule_desc_var = tk.StringVar()
+        rule_frame = ttk.Frame(rules_frame)
+        rule_frame.pack(fill="x", padx=4, pady=2)
+        ttk.Entry(rule_frame, textvariable=rule_desc_var, width=15, placeholder="描述").pack(side="left", padx=1)
+        ttk.Entry(rule_frame, textvariable=rule_pat_var, width=18, placeholder="正则匹配").pack(side="left", padx=1)
+        ttk.Entry(rule_frame, textvariable=rule_rep_var, width=12, placeholder="替换为").pack(side="left", padx=1)
+
+        def add_rule():
+            pat = rule_pat_var.get().strip()
+            rep = rule_rep_var.get().strip()
+            desc = rule_desc_var.get().strip()
+            if not pat:
+                return
+            try:
+                rule = RegexRule(pattern=pat, replacement=rep, description=desc)
+                config.regex_rules.append(rule)
+                rules_listbox.insert("end", f"✓ {desc}: {pat} → {rep}")
+                rule_pat_var.set("")
+                rule_rep_var.set("")
+                rule_desc_var.set("")
+                save_config(self._correction_config_path(), config)
+            except re.error as e:
+                messagebox.showerror("正则错误", str(e), parent=popup)
+
+        def toggle_rule():
+            sel = rules_listbox.curselection()
+            if not sel:
+                return
+            idx = sel[0]
+            config.regex_rules[idx].enabled = not config.regex_rules[idx].enabled
+            r = config.regex_rules[idx]
+            status = "✓" if r.enabled else "✗"
+            rules_listbox.delete(idx)
+            rules_listbox.insert(idx, f"{status} {r.description}: {r.pattern} → {r.replacement}")
+            save_config(self._correction_config_path(), config)
+
+        def del_rule():
+            sel = rules_listbox.curselection()
+            if not sel:
+                return
+            idx = sel[0]
+            config.regex_rules.pop(idx)
+            rules_listbox.delete(idx)
+            save_config(self._correction_config_path(), config)
+
+        ttk.Button(rule_frame, text="＋", command=add_rule, width=3).pack(side="left", padx=1)
+        ttk.Button(rule_frame, text="开关", command=toggle_rule, width=4).pack(side="left", padx=1)
+        ttk.Button(rule_frame, text="－", command=del_rule, width=3).pack(side="left", padx=1)
+
+        # Filler filter section
+        filler_frame = ttk.LabelFrame(popup, text="语气词过滤")
+        filler_frame.pack(fill="both", expand=True, padx=8, pady=4)
+
+        filler_var = tk.BooleanVar(value=config.filler_filter.enabled)
+        ttk.Checkbutton(filler_frame, text="启用语气词过滤",
+                        variable=filler_var,
+                        command=lambda: (setattr(config.filler_filter, 'enabled', filler_var.get()),
+                                         save_config(self._correction_config_path(), config))
+                        ).pack(anchor="w", padx=8, pady=2)
+
+        filler_words_frame = ttk.Frame(filler_frame)
+        filler_words_frame.pack(fill="both", expand=True, padx=4, pady=2)
+        filler_listbox = tk.Listbox(filler_words_frame, height=4, font=("Helvetica", 10))
+        filler_listbox.pack(side="left", fill="both", expand=True)
+        for w in config.filler_filter.words:
+            filler_listbox.insert("end", w)
+        filler_scroll = ttk.Scrollbar(filler_words_frame, command=filler_listbox.yview)
+        filler_scroll.pack(side="right", fill="y")
+        filler_listbox.config(yscrollcommand=filler_scroll.set)
+
+        filler_entry_var = tk.StringVar()
+        filler_entry_frame = ttk.Frame(filler_frame)
+        filler_entry_frame.pack(fill="x", padx=4, pady=2)
+        ttk.Entry(filler_entry_frame, textvariable=filler_entry_var, width=15, placeholder="语气词").pack(side="left", padx=2)
+
+        def add_filler():
+            word = filler_entry_var.get().strip()
+            if word and word not in config.filler_filter.words:
+                config.filler_filter.words.append(word)
+                filler_listbox.insert("end", word)
+                filler_entry_var.set("")
+                save_config(self._correction_config_path(), config)
+
+        def del_filler():
+            sel = filler_listbox.curselection()
+            if not sel:
+                return
+            idx = sel[0]
+            config.filler_filter.words.pop(idx)
+            filler_listbox.delete(idx)
+            save_config(self._correction_config_path(), config)
+
+        ttk.Button(filler_entry_frame, text="＋", command=add_filler, width=3).pack(side="left", padx=2)
+        ttk.Button(filler_entry_frame, text="－", command=del_filler, width=3).pack(side="left", padx=2)
+
+        # Bottom buttons
+        btn_frame = ttk.Frame(popup)
+        btn_frame.pack(fill="x", padx=8, pady=6)
+        ttk.Button(btn_frame, text="保存并关闭", command=popup.destroy).pack(side="right", padx=4)
 
 
 def _macos_open_file(title="选择文件", file_types=None):

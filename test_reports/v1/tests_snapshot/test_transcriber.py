@@ -46,10 +46,10 @@ class TranscriberTests(unittest.TestCase):
         results = match_transcription_to_segments(transcribed, annotations)
 
         self.assertEqual(len(results), 2)
-        # First annotation (0.5-4.0): overlaps with "大家好欢迎参加" (2.5s overlap, ratio 71%) most
-        self.assertEqual(results[0][1], "大家好欢迎参加")
-        # Second annotation (4.0-9.0): overlaps with "讨论项目进度" (4.0s overlap, ratio 80%) most
-        self.assertEqual(results[1][1], "讨论项目进度")
+        # First annotation (0.5-4.0) overlaps with first two transcribed segments
+        self.assertEqual(results[0][1], "大家好欢迎参加 本次会议")
+        # Second annotation (4.0-9.0) overlaps with second and third
+        self.assertEqual(results[1][1], "本次会议 讨论项目进度")
 
     def test_match_no_overlap_returns_empty(self):
         transcribed = [{"start": 0.0, "end": 2.0, "text": "hello"}]

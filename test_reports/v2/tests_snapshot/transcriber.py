@@ -50,7 +50,7 @@ class VadConfig:
 
 
 class FasterWhisperTranscriber:
-    def __init__(self, model_size="large-v3-turbo", device="auto", compute_type="float16"):
+    def __init__(self, model_size="medium", device="auto", compute_type="float16"):
         try:
             from faster_whisper import WhisperModel
         except ImportError as exc:
@@ -143,10 +143,7 @@ def transcribe_audio_segment(audio_path, segment, transcriber, language="zh"):
 def match_transcription_to_segments(transcribed_segments, annotation_segments):
     """Match full-file transcription to user annotation segments by time overlap.
 
-    For each annotation segment, finds the transcribed segment with the highest
-    overlap ratio and returns its text. This avoids duplicate text when merged
-    transcription segments span multiple annotation segments.
-
+    For each annotation segment, find the transcribed text that overlaps with it.
     Returns list of (annotation_segment, matched_text).
     """
     results = []
@@ -154,25 +151,17 @@ def match_transcription_to_segments(transcribed_segments, annotation_segments):
         seg = coerce_segment(annot_seg)
         seg_start = seg.start
         seg_end = seg.end
-        seg_duration = seg_end - seg_start
-        if seg_duration <= 0:
-            results.append((annot_seg, ""))
-            continue
+        matched_texts = []
 
-        best_overlap = 0.0
-        best_text = ""
         for tseg in transcribed_segments:
-            # Calculate overlap duration
-            overlap_start = max(seg_start, tseg["start"])
-            overlap_end = min(seg_end, tseg["end"])
-            overlap = max(0.0, overlap_end - overlap_start)
-            # Normalize by annotation segment duration
-            overlap_ratio = overlap / seg_duration
-            if overlap_ratio > best_overlap and tseg["text"]:
-                best_overlap = overlap_ratio
-                best_text = tseg["text"]
+            # Check overlap: transcribed segment overlaps with annotation segment
+            if tseg["end"] <= seg_start or tseg["start"] >= seg_end:
+                continue
+            if tseg["text"]:
+                matched_texts.append(tseg["text"])
 
-        results.append((annot_seg, best_text))
+        text = " ".join(matched_texts).strip() if matched_texts else ""
+        results.append((annot_seg, text))
     return results
 
 
@@ -209,18 +198,16 @@ def match_confidence_to_segments(word_data, annotation_segments):
 
 
 def merge_short_segments(segments: list[dict], min_duration: float = 1.0,
-                         max_gap: float = 0.5, max_duration: float = 8.0) -> list[dict]:
+                         max_gap: float = 0.5) -> list[dict]:
     """Merge adjacent short transcribed segments into longer ones.
 
     When Whisper's VAD produces many fragments shorter than min_duration,
     merge them with their neighbors if the gap is within max_gap seconds.
-    Caps merged segment duration at max_duration to prevent excessive spans.
 
     Args:
         segments: List of {start, end, text} dicts from transcription.
         min_duration: Segments shorter than this are candidates for merging.
         max_gap: Maximum gap between segments to consider for merging.
-        max_duration: Maximum allowed duration for a merged segment.
 
     Returns:
         Merged list of segments.
@@ -234,9 +221,7 @@ def merge_short_segments(segments: list[dict], min_duration: float = 1.0,
         prev_dur = prev["end"] - prev["start"]
         gap = seg["start"] - prev["end"]
 
-        if (prev_dur < min_duration
-                and 0 <= gap <= max_gap
-                and (prev["end"] - prev["start"]) + (seg["end"] - seg["start"]) + gap <= max_duration):
+        if prev_dur < min_duration and 0 <= gap <= max_gap:
             # Merge into previous segment
             prev["end"] = seg["end"]
             prev["text"] = (prev["text"] + " " + seg["text"]).strip()
@@ -268,7 +253,7 @@ def transcribe_with_model(path: str, model_size: str, language: str = "zh",
 
     Args:
         path: Audio file path.
-        model_size: Whisper model size ("tiny", "small", "medium", "large-v3-turbo", "large-v3").
+        model_size: Whisper model size ("tiny", "small", "medium", "large-v3").
         language: Language code.
         initial_prompt: Whisper initial prompt.
         vad_config: VadConfig instance.
